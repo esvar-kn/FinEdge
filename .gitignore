@@ -1,0 +1,24 @@
+# Dependency directories
+node_modules/
+jspm_packages/
+
+# Debug logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+logs/
+*.log
+
+# Local environment variables
+.env
+
+# Temporary files and OS artifacts
+.DS_Store
+Thumbs.db
+*.tmp
+src/data/*.tmp
+write_test.txt
+
+# Test coverage reports
+coverage/
+.nyc_output/
