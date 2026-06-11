@@ -13,7 +13,7 @@ This document outlines the validation standards and checklist to verify the deve
 ## 2. Detailed Success Criteria
 - **Node.js**: Version must be equal to or greater than `18.0.0`.
 - **npm**: Version must be equal to or greater than `9.0.0`.
-- **System Access**: The developer must be able to read and write files inside `/Users/esvarnatarajan/Desktop/Airtribe/Coding_practise/AI-Projects/Project2/`.
+- **System Access**: The developer must be able to read and write files inside `/Users/esvarnatarajan/Desktop/Airtribe/Projects/FinEdge/`.
 
 ---
 

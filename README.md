@@ -7,7 +7,7 @@ FinEdge is a clean, modular RESTful API backend for tracking personal finance tr
 ## Directory Structure
 
 ```text
-Project2/
+FinEdge/
 ├── docs/
 │   ├── problemStatement.md    # Background context, scope, allocation details
 │   ├── architecture.md        # Modular interfaces, databases, schemas, workflows
@@ -50,7 +50,7 @@ Project2/
 ## Installation & Setup
 
 1. **Install Dependencies**:
-   Navigate to the `Project2` directory and install required npm packages:
+   Navigate to the `FinEdge` directory and install required npm packages:
    ```bash
    npm install
    ```

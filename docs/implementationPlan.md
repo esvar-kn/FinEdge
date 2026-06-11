@@ -1,13 +1,13 @@
 # Phase-Wise Implementation Plan: FinEdge – Personal Finance & Expense Tracker API
 
-This implementation plan outlines the development path for the FinEdge API backend, dividing the work into logical, sequential phases. It is designed to be aligned with the specifications in [architecture.md](file:///Users/esvarnatarajan/Desktop/Airtribe/Coding_practise/AI-Projects/Project2/docs/architecture.md) and the targets in [problemStatement.md](file:///Users/esvarnatarajan/Desktop/Airtribe/Coding_practise/AI-Projects/Project2/docs/problemStatement.md).
+This implementation plan outlines the development path for the FinEdge API backend, dividing the work into logical, sequential phases. It is designed to be aligned with the specifications in [architecture.md](file:///Users/esvarnatarajan/Desktop/Airtribe/Projects/FinEdge/docs/architecture.md) and the targets in [problemStatement.md](file:///Users/esvarnatarajan/Desktop/Airtribe/Projects/FinEdge/docs/problemStatement.md).
 
 ---
 
 ## Project Directory Structure
 
 ```text
-Project2/
+FinEdge/
 ├── docs/
 │   ├── problemStatement.md
 │   ├── architecture.md
@@ -51,7 +51,7 @@ Project2/
 2. **Verify npm Version**:
    - Ensure npm version is equal to or greater than 9.x by running `npm -v` in the shell.
 3. **Workspace Permissions Validation**:
-   - Verify read and write accessibility inside the `Project2` directory.
+   - Verify read and write accessibility inside the `FinEdge` directory.
 
 ### Verification Steps
 - Run `node -v` and `npm -v` in the terminal to confirm versions are within required bounds.
