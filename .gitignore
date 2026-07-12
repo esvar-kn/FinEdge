@@ -19,6 +19,12 @@ Thumbs.db
 src/data/*.tmp
 write_test.txt
 
+# Local JSON data store (contains user records & password hashes) and
+# backups of corrupted data files — never commit these.
+src/data/*.json
+!src/data/.gitkeep
+*.corrupt-*
+
 # Test coverage reports
 coverage/
 .nyc_output/

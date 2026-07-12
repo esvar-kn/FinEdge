@@ -1,5 +1,6 @@
 import { AppError } from './errorHandler.js';
 import jwt from 'jsonwebtoken';
+import config from '../config/index.js';
 
 
 /**
@@ -81,7 +82,38 @@ export function validateTransaction(req, res, next) {
 }
 
 /**
- * Authentication simulator middleware that extracts and validates X-User-Id header.
+ * Validates transaction update payloads. Fields are optional (partial update),
+ * but any field that IS provided must be valid — closing the gap where a PUT
+ * could set a negative/non-numeric amount or an invalid type.
+ */
+export function validateTransactionUpdate(req, res, next) {
+  const { amount, type, category } = req.body;
+  const errors = [];
+
+  if (amount !== undefined) {
+    const parsedAmount = parseFloat(amount);
+    if (isNaN(parsedAmount) || parsedAmount <= 0) {
+      errors.push('Amount must be a positive number greater than 0.');
+    }
+  }
+
+  if (type !== undefined && !['income', 'expense'].includes(type)) {
+    errors.push("Type must be either 'income' or 'expense'.");
+  }
+
+  if (category !== undefined && (typeof category !== 'string' || category.trim().length === 0)) {
+    errors.push('Category must be a non-empty string.');
+  }
+
+  if (errors.length > 0) {
+    return next(new AppError(errors.join(' | '), 400));
+  }
+
+  next();
+}
+
+/**
+ * Authentication middleware: verifies the Bearer JWT and attaches req.userId.
  */
 export function requireAuth(req, res, next) {
   const authHeader = req.headers['authorization'];
@@ -92,7 +124,7 @@ export function requireAuth(req, res, next) {
   const token = authHeader.split(' ')[1];
 
   try {
-    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'super_secret_signing_key');
+    const decoded = jwt.verify(token, config.jwtSecret);
     req.userId = decoded.id;
     next();
   } catch (error) {

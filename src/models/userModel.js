@@ -1,17 +1,12 @@
 import { v4 as uuidv4 } from 'uuid';
-import path from 'path';
-import dotenv from 'dotenv';
-import bcrypt from 'bcryptjs';
-import { readJSONFile, writeJSONFile } from '../utils/fileHandler.js';
+import config from '../config/index.js';
+import { readJSONFile, updateJSONFile } from '../utils/fileHandler.js';
 
-dotenv.config();
-
-// Get absolute path of users.json from env, fallback to default
-const DB_PATH = path.resolve(process.env.USERS_DB_PATH || 'src/data/users.json');
+const DB_PATH = config.usersDbPath;
 
 class UserModel {
   /**
-   * Reads all users from data/users.json.
+   * Reads all users from the data store.
    * @returns {Promise<Array<Object>>}
    */
   static async findAll() {
@@ -19,8 +14,8 @@ class UserModel {
   }
 
   /**
-   * Finds user by email.
-   * @param {string} email 
+   * Finds a user by email (case-insensitive). Returns the raw record incl. hash.
+   * @param {string} email
    * @returns {Promise<Object|null>}
    */
   static async findByEmail(email) {
@@ -29,34 +24,34 @@ class UserModel {
   }
 
   /**
-   * Saves a new user record.
-   * @param {Object} userData 
-   * @returns {Promise<Object>} The created user record.
+   * Finds a user by username (case-insensitive).
+   * @param {string} username
+   * @returns {Promise<Object|null>}
+   */
+  static async findByUsername(username) {
+    const users = await this.findAll();
+    return users.find(u => u.username.toLowerCase() === username.toLowerCase()) || null;
+  }
+
+  /**
+   * Persists a new user record. The password must already be hashed by the
+   * service layer — the model does not hash. Returns the record without password.
+   * @param {Object} userData
+   * @returns {Promise<Object>}
    */
   static async create(userData) {
-    const users = await this.findAll();
-    
-    let password = userData.password;
-    const isAlreadyHashed = typeof password === 'string' && password.startsWith('$2') && password.length === 60;
-    if (!isAlreadyHashed && password) {
-      const salt = await bcrypt.genSalt(10);
-      password = await bcrypt.hash(password, salt);
-    }
-    
-    const newUser = {
-      id: uuidv4(),
-      username: userData.username,
-      email: userData.email,
-      password,
-      createdAt: new Date().toISOString()
-    };
-    
-    users.push(newUser);
-    await writeJSONFile(DB_PATH, users);
-    
-    // Return the new user without password for safety
-    const { password: _, ...userWithoutPassword } = newUser;
-    return userWithoutPassword;
+    return updateJSONFile(DB_PATH, (users) => {
+      const newUser = {
+        id: uuidv4(),
+        username: userData.username,
+        email: userData.email,
+        password: userData.password,
+        createdAt: new Date().toISOString()
+      };
+      users.push(newUser);
+      const { password: _pw, ...userWithoutPassword } = newUser;
+      return { data: users, result: userWithoutPassword };
+    });
   }
 }
 

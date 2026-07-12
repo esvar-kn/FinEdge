@@ -73,11 +73,9 @@ class TransactionController {
     try {
       const { id } = req.params;
       await TransactionService.removeTransaction(id, req.userId);
-      
-      res.status(204).json({
-        status: 'success',
-        data: null
-      });
+
+      // 204 No Content: no response body
+      res.status(204).send();
     } catch (error) {
       next(error);
     }

@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import TransactionController from '../controllers/transactionController.js';
-import { requireAuth, validateTransaction } from '../middleware/validator.js';
+import { requireAuth, validateTransaction, validateTransactionUpdate } from '../middleware/validator.js';
 
 const router = Router();
 
@@ -10,7 +10,7 @@ router.use(requireAuth);
 router.get('/', TransactionController.getTransactions);
 router.get('/summary', TransactionController.getTransactionSummary);
 router.post('/', validateTransaction, TransactionController.createTransaction);
-router.put('/:id', TransactionController.updateTransaction);
+router.put('/:id', validateTransactionUpdate, TransactionController.updateTransaction);
 router.delete('/:id', TransactionController.deleteTransaction);
 
 export default router;
