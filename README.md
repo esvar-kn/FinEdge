@@ -12,9 +12,12 @@ FinEdge is a clean, modular RESTful API backend for tracking personal finances �
 | Recurring | Daily/weekly/monthly/yearly rules that auto-materialize with catch-up after downtime |
 | Import/Export | CSV export honoring all filters; CSV import with per-row error reporting |
 | Categories | Case, whitespace, and plural variants fold onto one category; used + suggested category listing |
-| Insights | Rule-based advice out of the box; optional AI-generated advice via the Groq API (free tier) |
+| Goals | Savings goals with target, deadline, contributions, and progress tracking |
+| Currency | Per-user display currency (10 supported) reflected across the whole app |
+| Insights | Rule-based advice out of the box; optional AI-generated advice via the Groq API (free tier); month-end forecast, bill reminders, and year reports |
 | Security | JWT auth, bcrypt hashing, helmet headers, opt-in CORS, rate-limited auth endpoints |
-| Reliability | WAL-mode SQLite, foreign keys with cascade, daily backups with retention, 57 automated tests |
+| Reliability | WAL-mode SQLite, foreign keys with cascade, daily backups with retention, 70 automated tests |
+| Frontend | Connected single-page web UI (served by the backend) with an installable PWA manifest |
 
 ---
 
@@ -39,7 +42,8 @@ FinEdge/
 │   │   ├── transactionRoutes.js   # CRUD, analytics, CSV import/export routes
 │   │   ├── budgetRoutes.js        # Per-category monthly budget routes
 │   │   ├── recurringRoutes.js     # Recurring transaction rule routes
-│   │   └── categoryRoutes.js      # Category listing route
+│   │   ├── categoryRoutes.js      # Category listing route
+│   │   └── goalRoutes.js          # Savings goal routes
 │   ├── controllers/
 │   │   ├── userController.js      # Register, login, profile, password, delete account
 │   │   ├── transactionController.js # Query parsing, pagination metadata, CSV responses
@@ -51,13 +55,15 @@ FinEdge/
 │   │   ├── budgetService.js       # Budget upserts and spend-vs-limit status
 │   │   ├── recurringService.js    # Rule materialization with catch-up
 │   │   ├── categoryService.js     # Category normalization and suggestions
+│   │   ├── goalService.js         # Savings goal logic and progress
 │   │   └── aiInsightsService.js   # Groq-powered advice with rule-based fallback
 │   ├── models/
 │   │   ├── userModel.js           # Users table access
 │   │   ├── transactionModel.js    # Transactions: filters, aggregation, trend queries
 │   │   ├── budgetModel.js         # Budgets table access
 │   │   ├── recurringModel.js      # Recurring rules table access
-│   │   └── categoryModel.js       # Distinct categories across all tables
+│   │   ├── categoryModel.js       # Distinct categories across all tables
+│   │   └── goalModel.js           # Savings goals table access
 │   ├── middleware/
 │   │   ├── logger.js              # Request logger with timing metrics
 │   │   ├── errorHandler.js        # Centralized operational AppError handling
@@ -65,6 +71,7 @@ FinEdge/
 │   │   └── rateLimiter.js         # Brute-force protection for auth endpoints
 │   ├── utils/
 │   │   ├── insightHelper.js       # Rule-based spending ratios and advice
+│   │   ├── currency.js            # Supported currencies + validation
 │   │   ├── dates.js               # Date validation, month ranges, recurrence arithmetic
 │   │   ├── csv.js                 # Dependency-free RFC-4180 CSV encode/parse
 │   │   └── backup.js              # Automated daily DB snapshots with retention
@@ -81,7 +88,8 @@ FinEdge/
 │   ├── concurrency.suite.js       # Concurrent writes and update validation
 │   ├── features.suite.js          # Pagination, search, sorting, account management
 │   ├── highimpact.suite.js        # Dates, budgets, recurring rules, CSV
-│   └── lowimpact.suite.js         # Categories, AI insights, security headers
+│   ├── lowimpact.suite.js         # Categories, AI insights, security headers
+│   └── enhancements.suite.js      # Currency, goals, reminders, forecast, report
 ├── FrontEnd/                      # Web UI assets and design mockups (work in progress)
 ├── .env.example                   # Environment configuration template
 ├── .gitignore                     # Excluded workspace files (DB, backups, secrets)
@@ -149,7 +157,7 @@ FinEdge/
 ## Testing
 
 ```bash
-npm test              # run all 57 tests
+npm test              # run all 70 tests
 npm run test:coverage # run with c8 coverage reporting
 ```
 
@@ -170,7 +178,9 @@ Base URL: `http://localhost:3000`. All routes except registration, login, and th
 | :--- | :--- | :--- | :--- | :--- |
 | **POST** | `/api/users/register` | — | Registers a new account, hashes the password, and returns a signed JWT | `{ "username": "min-3", "email": "email", "password": "min-6" }` |
 | **POST** | `/api/users/login` | — | Validates credentials and returns a signed JWT | `{ "email": "email", "password": "password" }` |
-| **GET** | `/api/users/me` | Bearer | Returns the authenticated user's profile | — |
+| **GET** | `/api/users/me` | Bearer | Returns the authenticated user's profile (includes `currency`) | — |
+| **GET** | `/api/users/settings` | Bearer | Returns settings (`currency`) and the list of supported currencies | — |
+| **PUT** | `/api/users/settings` | Bearer | Updates settings; validates the currency code | `{ "currency": "USD" }` |
 | **PUT** | `/api/users/password` | Bearer | Changes the password (verifies the current one) | `{ "currentPassword": "string", "newPassword": "min-6" }` |
 | **DELETE** | `/api/users/me` | Bearer | Deletes the account and all its data (cascade) | `{ "password": "string" }` |
 
@@ -183,6 +193,8 @@ Base URL: `http://localhost:3000`. All routes except registration, login, and th
 | **DELETE** | `/api/transactions/:id` | Bearer | Deletes a transaction (verifies ownership) |
 | **GET** | `/api/transactions/summary` | Bearer | Balance sheet, category breakdown, budget status, and insights. `?month=YYYY-MM` restricts to one month |
 | **GET** | `/api/transactions/trend` | Bearer | Per-month income/expense totals for charting (`?months=N`, default 6, max 24) |
+| **GET** | `/api/transactions/forecast` | Bearer | Projects the current month's end-of-month income/expense/net (actuals so far + recurring still due before month end) |
+| **GET** | `/api/transactions/report` | Bearer | Year report: per-month totals and category breakdown (`?year=YYYY`, default current year) |
 | **GET** | `/api/transactions/ai-insights` | Bearer | AI-generated financial advice (`?month=YYYY-MM` optional) — see AI Insights below |
 | **GET** | `/api/transactions/export` | Bearer | Downloads transactions as CSV (honors the same filters as the list endpoint) |
 | **POST** | `/api/transactions/import` | Bearer | Imports transactions from a CSV request body (`Content-Type: text/csv`). Required columns: `type,category,amount`; optional: `description,date`. Invalid rows are skipped and reported per line |
@@ -213,6 +225,7 @@ Each budget status entry reports `spent`, `remaining`, `percentUsed`, and a `sta
 | Method | Endpoint | Auth | Description |
 | :--- | :--- | :--- | :--- |
 | **GET** | `/api/recurring` | Bearer | Lists recurring rules |
+| **GET** | `/api/recurring/upcoming` | Bearer | Bill reminders: rules due within `?days=N` (default 30, max 365), each with `daysUntil` |
 | **POST** | `/api/recurring` | Bearer | Creates a rule: `{ "type", "category", "amount", "frequency": "daily"\|"weekly"\|"monthly"\|"yearly", "description"?, "startDate"?, "endDate"? }` |
 | **DELETE** | `/api/recurring/:id` | Bearer | Deletes a rule (transactions it already created are kept) |
 
@@ -224,6 +237,22 @@ Due runs materialize automatically — on server start, whenever the user's tran
 | **GET** | `/api/categories` | Bearer | Lists the user's used categories plus default suggestions they haven't used yet |
 
 Categories are normalized on every write (transactions, budgets, recurring rules, CSV import): case and whitespace variants and simple plurals fold onto the user's first-used spelling, so "Food", "food " and "FOODS" — or "grocery" and "Groceries" — never fragment your breakdown.
+
+### 6. Savings Goal Routes
+| Method | Endpoint | Auth | Description |
+| :--- | :--- | :--- | :--- |
+| **GET** | `/api/goals` | Bearer | Lists goals with computed `saved`, `remaining`, `percentSaved`, and `complete` |
+| **POST** | `/api/goals` | Bearer | Creates a goal: `{ "name", "target", "saved"?, "deadline"? }` |
+| **PUT** | `/api/goals/:id` | Bearer | Updates a goal's fields (verifies ownership) |
+| **POST** | `/api/goals/:id/contribute` | Bearer | Adds `{ "amount" }` to the saved balance (negative withdraws; clamped at 0) |
+| **DELETE** | `/api/goals/:id` | Bearer | Deletes a goal |
+
+### 7. Category & Currency
+| Method | Endpoint | Auth | Description |
+| :--- | :--- | :--- | :--- |
+| **GET** | `/api/categories` | Bearer | Used categories plus unused default suggestions |
+
+Currency is a **per-user display preference** set via `PUT /api/users/settings` (see the user routes above). Ten currencies are supported (USD, EUR, GBP, INR, JPY, CAD, AUD, SGD, AED, CHF); the frontend formats every amount with the chosen currency. Amounts are stored currency-neutrally as integer minor units — **FinEdge does not convert between currencies**.
 
 ---
 
