@@ -1,5 +1,4 @@
-import dotenv from 'dotenv';
-dotenv.config();
+import config from '../config/index.js';
 
 /**
  * Generates rule-based financial advice insights from financial summaries.
@@ -22,7 +21,7 @@ export function generateInsights(summary) {
   }
 
   // 1. Savings Alert (trigger warning if expenses exceed configured threshold of total income)
-  const threshold = parseFloat(process.env.SAVINGS_WARNING_THRESHOLD || 0.70);
+  const threshold = config.savingsWarningThreshold;
   const spendingRatio = totalExpenses / totalIncome;
   if (spendingRatio > threshold) {
     insights.push(`Warning: Your total expenses consume ${(spendingRatio * 100).toFixed(1)}% of your income. This exceeds the recommended ${(threshold * 100).toFixed(0)}% threshold. Try restricting non-essential spending.`);

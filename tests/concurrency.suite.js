@@ -1,24 +1,14 @@
 import { describe, test, before, after } from 'node:test';
 import assert from 'node:assert';
 import request from 'supertest';
-import fs from 'fs/promises';
-import path from 'path';
 import app from '../src/app.js';
-
-const usersDbPath = path.resolve('src/data/users.json');
-const txDbPath = path.resolve('src/data/transactions.json');
+import { resetDatabase } from './helpers.js';
 
 describe('Persistence Concurrency & Update Validation', () => {
-  let originalUsers = '[]';
-  let originalTxs = '[]';
   let token;
 
   before(async () => {
-    try { originalUsers = await fs.readFile(usersDbPath, 'utf8'); } catch { originalUsers = '[]'; }
-    try { originalTxs = await fs.readFile(txDbPath, 'utf8'); } catch { originalTxs = '[]'; }
-
-    await fs.writeFile(usersDbPath, '[]');
-    await fs.writeFile(txDbPath, '[]');
+    resetDatabase();
 
     const res = await request(app)
       .post('/api/users/register')
@@ -26,10 +16,7 @@ describe('Persistence Concurrency & Update Validation', () => {
     token = res.body.data.token;
   });
 
-  after(async () => {
-    await fs.writeFile(usersDbPath, originalUsers);
-    await fs.writeFile(txDbPath, originalTxs);
-  });
+  after(() => resetDatabase());
 
   test('all concurrent transaction writes are persisted (no lost updates)', async () => {
     const N = 20;

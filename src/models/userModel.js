@@ -1,57 +1,87 @@
 import { v4 as uuidv4 } from 'uuid';
-import config from '../config/index.js';
-import { readJSONFile, updateJSONFile } from '../utils/fileHandler.js';
-
-const DB_PATH = config.usersDbPath;
+import db from '../db/index.js';
 
 class UserModel {
   /**
-   * Reads all users from the data store.
+   * Reads all users from the data store (raw records, incl. password hashes).
    * @returns {Promise<Array<Object>>}
    */
   static async findAll() {
-    return await readJSONFile(DB_PATH);
+    return db.prepare('SELECT * FROM users').all();
   }
 
   /**
-   * Finds a user by email (case-insensitive). Returns the raw record incl. hash.
+   * Finds a user by id. Returns the raw record incl. hash, or null.
+   * @param {string} id
+   * @returns {Promise<Object|null>}
+   */
+  static async findById(id) {
+    return db.prepare('SELECT * FROM users WHERE id = ?').get(id) || null;
+  }
+
+  /**
+   * Finds a user by email (case-insensitive via COLLATE NOCASE). Returns the
+   * raw record incl. hash.
    * @param {string} email
    * @returns {Promise<Object|null>}
    */
   static async findByEmail(email) {
-    const users = await this.findAll();
-    return users.find(u => u.email.toLowerCase() === email.toLowerCase()) || null;
+    return db.prepare('SELECT * FROM users WHERE email = ?').get(email) || null;
   }
 
   /**
-   * Finds a user by username (case-insensitive).
+   * Finds a user by username (case-insensitive via COLLATE NOCASE).
    * @param {string} username
    * @returns {Promise<Object|null>}
    */
   static async findByUsername(username) {
-    const users = await this.findAll();
-    return users.find(u => u.username.toLowerCase() === username.toLowerCase()) || null;
+    return db.prepare('SELECT * FROM users WHERE username = ?').get(username) || null;
   }
 
   /**
    * Persists a new user record. The password must already be hashed by the
    * service layer — the model does not hash. Returns the record without password.
+   * UNIQUE constraints on email/username make duplicate registration impossible
+   * even under concurrent requests; violations surface as SqliteError with
+   * code SQLITE_CONSTRAINT_UNIQUE for the service to translate.
    * @param {Object} userData
    * @returns {Promise<Object>}
    */
   static async create(userData) {
-    return updateJSONFile(DB_PATH, (users) => {
-      const newUser = {
-        id: uuidv4(),
-        username: userData.username,
-        email: userData.email,
-        password: userData.password,
-        createdAt: new Date().toISOString()
-      };
-      users.push(newUser);
-      const { password: _pw, ...userWithoutPassword } = newUser;
-      return { data: users, result: userWithoutPassword };
-    });
+    const newUser = {
+      id: uuidv4(),
+      username: userData.username,
+      email: userData.email,
+      password: userData.password,
+      createdAt: new Date().toISOString()
+    };
+    db.prepare(
+      'INSERT INTO users (id, username, email, password, createdAt) VALUES (@id, @username, @email, @password, @createdAt)'
+    ).run(newUser);
+
+    const { password: _pw, ...userWithoutPassword } = newUser;
+    return userWithoutPassword;
+  }
+
+  /**
+   * Replaces a user's password hash.
+   * @param {string} id
+   * @param {string} hashedPassword
+   * @returns {Promise<boolean>} True if a record was updated.
+   */
+  static async updatePassword(id, hashedPassword) {
+    const info = db.prepare('UPDATE users SET password = ? WHERE id = ?').run(hashedPassword, id);
+    return info.changes > 0;
+  }
+
+  /**
+   * Deletes a user; ON DELETE CASCADE removes their transactions too.
+   * @param {string} id
+   * @returns {Promise<boolean>} True if a record was removed.
+   */
+  static async delete(id) {
+    const info = db.prepare('DELETE FROM users WHERE id = ?').run(id);
+    return info.changes > 0;
   }
 }
 

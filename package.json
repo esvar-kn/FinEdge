@@ -4,18 +4,27 @@
   "description": "Personal Finance Tracker API backend",
   "main": "src/app.js",
   "type": "module",
+  "engines": {
+    "node": ">=18"
+  },
   "scripts": {
     "start": "node src/app.js",
     "dev": "nodemon src/app.js",
-    "test": "node --test tests/**/*.test.js",
-    "test:coverage": "c8 node --test tests/**/*.test.js"
+    "test": "NODE_ENV=test DB_PATH=src/data/test.db BACKUP_DIR=src/data/test-backups node --test tests/**/*.test.js",
+    "test:coverage": "NODE_ENV=test DB_PATH=src/data/test.db BACKUP_DIR=src/data/test-backups c8 node --test tests/**/*.test.js",
+    "migrate:json": "node scripts/migrate-json-to-sqlite.js",
+    "backup": "node -e \"import('./src/utils/backup.js').then(m => m.runBackup()).then(p => console.log('Backed up to', p))\""
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",
+    "better-sqlite3": "^12.11.1",
+    "cors": "^2.8.6",
     "dotenv": "^16.4.5",
     "express": "^4.19.2",
+    "express-rate-limit": "^8.6.0",
+    "helmet": "^8.3.0",
     "jsonwebtoken": "^9.0.3",
-    "uuid": "^9.0.1"
+    "uuid": "^11.1.1"
   },
   "devDependencies": {
     "c8": "^11.0.0",

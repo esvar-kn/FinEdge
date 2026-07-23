@@ -33,7 +33,17 @@ class UserService {
     const salt = await bcrypt.genSalt(10);
     const hashedPassword = await bcrypt.hash(password, salt);
 
-    const newUser = await UserModel.create({ username, email, password: hashedPassword });
+    let newUser;
+    try {
+      newUser = await UserModel.create({ username, email, password: hashedPassword });
+    } catch (error) {
+      // UNIQUE constraint backstop: two simultaneous registrations can both
+      // pass the pre-checks above, but only one insert can win.
+      if (error.code === 'SQLITE_CONSTRAINT_UNIQUE') {
+        throw new AppError('Email or username is already registered.', 400);
+      }
+      throw error;
+    }
     const token = this.signToken(newUser.id);
     return { user: newUser, token };
   }
@@ -59,6 +69,66 @@ class UserService {
     const { password: _pw, ...userWithoutPassword } = rawUser;
     const token = this.signToken(rawUser.id);
     return { user: userWithoutPassword, token };
+  }
+
+  /**
+   * Returns the user's profile (no password hash).
+   * @param {string} userId
+   * @returns {Promise<Object>}
+   */
+  static async getProfile(userId) {
+    const rawUser = await UserModel.findById(userId);
+    if (!rawUser) {
+      throw new AppError('User not found.', 404);
+    }
+    const { password: _pw, ...userWithoutPassword } = rawUser;
+    return userWithoutPassword;
+  }
+
+  /**
+   * Changes the user's password after verifying the current one.
+   * @param {string} userId
+   * @param {string} currentPassword
+   * @param {string} newPassword
+   * @returns {Promise<boolean>}
+   */
+  static async changePassword(userId, currentPassword, newPassword) {
+    const rawUser = await UserModel.findById(userId);
+    if (!rawUser) {
+      throw new AppError('User not found.', 404);
+    }
+
+    const isMatch = await bcrypt.compare(currentPassword, rawUser.password);
+    if (!isMatch) {
+      throw new AppError('Current password is incorrect.', 401);
+    }
+
+    const salt = await bcrypt.genSalt(10);
+    const hashedPassword = await bcrypt.hash(newPassword, salt);
+    await UserModel.updatePassword(userId, hashedPassword);
+    return true;
+  }
+
+  /**
+   * Deletes the user's account (and, via cascade, all their transactions)
+   * after verifying their password.
+   * @param {string} userId
+   * @param {string} password
+   * @returns {Promise<boolean>}
+   */
+  static async deleteAccount(userId, password) {
+    const rawUser = await UserModel.findById(userId);
+    if (!rawUser) {
+      throw new AppError('User not found.', 404);
+    }
+
+    const isMatch = await bcrypt.compare(password, rawUser.password);
+    if (!isMatch) {
+      throw new AppError('Password is incorrect.', 401);
+    }
+
+    await UserModel.delete(userId);
+    return true;
   }
 }
 

@@ -19,9 +19,15 @@ Thumbs.db
 src/data/*.tmp
 write_test.txt
 
-# Local JSON data store (contains user records & password hashes) and
-# backups of corrupted data files — never commit these.
+# Local data stores (contain user records & password hashes) and their
+# backups — never commit these. Covers the SQLite DB (+ WAL/SHM journals),
+# the legacy JSON stores, and corrupt-file backups.
 src/data/*.json
+src/data/*.db
+src/data/*.db-wal
+src/data/*.db-shm
+src/data/backups/
+src/data/test-backups/
 !src/data/.gitkeep
 *.corrupt-*
 

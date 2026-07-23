@@ -1,38 +1,17 @@
 import { describe, test, before, after } from 'node:test';
 import assert from 'node:assert';
 import request from 'supertest';
-import fs from 'fs/promises';
-import path from 'path';
 import app from '../src/app.js';
-
-const usersDbPath = path.resolve('src/data/users.json');
-const txDbPath = path.resolve('src/data/transactions.json');
+import { resetDatabase, clearTransactions } from './helpers.js';
 
 describe('Transaction API & Analytics', () => {
-  let originalUsers = '[]';
-  let originalTxs = '[]';
-  
   let tokenUserA;
   let userIdUserA;
   let tokenUserB;
   let userIdUserB;
 
   before(async () => {
-    // Back up the databases
-    try {
-      originalUsers = await fs.readFile(usersDbPath, 'utf8');
-    } catch (e) {
-      originalUsers = '[]';
-    }
-    try {
-      originalTxs = await fs.readFile(txDbPath, 'utf8');
-    } catch (e) {
-      originalTxs = '[]';
-    }
-
-    // Clear databases
-    await fs.writeFile(usersDbPath, '[]');
-    await fs.writeFile(txDbPath, '[]');
+    resetDatabase();
 
     // Setup: Register User A and User B
     const resA = await request(app)
@@ -50,11 +29,7 @@ describe('Transaction API & Analytics', () => {
     userIdUserB = resB.body.data.user.id;
   });
 
-  after(async () => {
-    // Restore original databases
-    await fs.writeFile(usersDbPath, originalUsers);
-    await fs.writeFile(txDbPath, originalTxs);
-  });
+  after(() => resetDatabase());
 
   describe('Authentication Enforcement', () => {
     test('should reject requests without authorization header', async () => {
@@ -279,8 +254,8 @@ describe('Transaction API & Analytics', () => {
 
   describe('Financial Analytics & Savings Alert Insights', () => {
     test('should calculate correct summary statistics and savings warnings', async () => {
-      // Clear files so calculations are exact
-      await fs.writeFile(txDbPath, '[]');
+      // Clear transactions so calculations are exact
+      clearTransactions();
 
       // 1. Create Income: 2000.00
       await request(app)

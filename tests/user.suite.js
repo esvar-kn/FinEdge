@@ -1,40 +1,12 @@
 import { describe, test, before, after } from 'node:test';
 import assert from 'node:assert';
 import request from 'supertest';
-import fs from 'fs/promises';
-import path from 'path';
 import app from '../src/app.js';
-
-const usersDbPath = path.resolve('src/data/users.json');
-const txDbPath = path.resolve('src/data/transactions.json');
+import { resetDatabase } from './helpers.js';
 
 describe('User Authentication API', () => {
-  let originalUsers = '[]';
-  let originalTxs = '[]';
-
-  before(async () => {
-    // Back up the databases
-    try {
-      originalUsers = await fs.readFile(usersDbPath, 'utf8');
-    } catch (e) {
-      originalUsers = '[]';
-    }
-    try {
-      originalTxs = await fs.readFile(txDbPath, 'utf8');
-    } catch (e) {
-      originalTxs = '[]';
-    }
-
-    // Set up clean environment
-    await fs.writeFile(usersDbPath, '[]');
-    await fs.writeFile(txDbPath, '[]');
-  });
-
-  after(async () => {
-    // Restore original database contents
-    await fs.writeFile(usersDbPath, originalUsers);
-    await fs.writeFile(txDbPath, originalTxs);
-  });
+  before(() => resetDatabase());
+  after(() => resetDatabase());
 
   describe('POST /api/users/register', () => {
     test('should register a new user successfully and return a token (without password)', async () => {
