@@ -1,0 +1,72 @@
+/* Additional styles to support the Obsidian Gold theme */
+
+/* Override default focus outlines for Tailwind */
+input:focus, select:focus, textarea:focus {
+  outline: none !important;
+  box-shadow: 0 0 0 1px #eab308 !important;
+  border-color: #eab308 !important;
+}
+
+/* Tabular figures for aligned currency columns */
+.font-mono, td, th, .amount-text {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Toast styling matching the Obsidian Gold aesthetic */
+.toast-container {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  z-index: 3000;
+}
+
+.toast {
+  background: #1e2020;
+  border: 1px solid #292a2a;
+  border-left: 3px solid #ffd165;
+  color: #e3e2e2;
+  padding: 14px 20px;
+  min-width: 300px;
+  max-width: 440px;
+  font-family: 'Inter', sans-serif;
+  font-size: 13px;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
+  animation: slideIn 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: all 0.2s ease-out;
+}
+
+.toast.success {
+  border-left-color: #10b981;
+}
+
+.toast.error {
+  border-left-color: #ef4444;
+}
+
+.toast.warning {
+  border-left-color: #f59e0b;
+}
+
+.toast.fade-out {
+  opacity: 0;
+  transform: translateY(8px);
+}
+
+@keyframes slideIn {
+  from {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}

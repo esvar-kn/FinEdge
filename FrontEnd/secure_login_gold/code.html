@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>FinEdge | Executive Login</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@100..900&family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@100..900&display=swap" rel="stylesheet"/>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        /* Custom scrollbar for high-end feel */
+        ::-webkit-scrollbar {
+            width: 4px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #121414;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #262626;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #ffd165;
+        }
+        /* Focused layout for login */
+        body {
+            background-color: #0a0a0a;
+            overflow: hidden;
+        }
+    </style>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            "colors": {
+                    "secondary-fixed-dim": "#c8c6c5",
+                    "on-primary": "#3f2e00",
+                    "primary-container": "#eab308",
+                    "on-error-container": "#ffdad6",
+                    "on-primary-container": "#604700",
+                    "on-tertiary-fixed": "#1b1c1c",
+                    "secondary-container": "#474746",
+                    "surface-bright": "#38393a",
+                    "on-surface-variant": "#d3c5ac",
+                    "inverse-primary": "#785a00",
+                    "tertiary-container": "#bdbbbb",
+                    "secondary": "#c8c6c5",
+                    "on-primary-fixed": "#251a00",
+                    "tertiary": "#d9d7d6",
+                    "on-tertiary-fixed-variant": "#474746",
+                    "error-container": "#93000a",
+                    "error": "#ffb4ab",
+                    "surface-container": "#1e2020",
+                    "on-secondary-fixed": "#1c1b1b",
+                    "surface-container-low": "#1a1c1c",
+                    "inverse-surface": "#e3e2e2",
+                    "surface-dim": "#121414",
+                    "tertiary-fixed": "#e4e2e1",
+                    "outline-variant": "#4f4633",
+                    "on-surface": "#e3e2e2",
+                    "on-secondary-container": "#b7b5b4",
+                    "on-error": "#690005",
+                    "surface-container-lowest": "#0d0e0f",
+                    "primary-fixed": "#ffdf9a",
+                    "background": "#121414",
+                    "surface-variant": "#343535",
+                    "on-secondary": "#313030",
+                    "outline": "#9b8f79",
+                    "primary": "#ffd165",
+                    "surface-tint": "#f7be1d",
+                    "on-secondary-fixed-variant": "#474746",
+                    "surface-container-highest": "#343535",
+                    "secondary-fixed": "#e5e2e1",
+                    "inverse-on-surface": "#2f3131",
+                    "on-background": "#e3e2e2",
+                    "primary-fixed-dim": "#f7be1d",
+                    "on-primary-fixed-variant": "#5a4300",
+                    "on-tertiary-container": "#4b4b4b",
+                    "surface-container-high": "#292a2a",
+                    "on-tertiary": "#303030",
+                    "tertiary-fixed-dim": "#c8c6c5",
+                    "surface": "#121414"
+            },
+            "borderRadius": {
+                    "DEFAULT": "0.25rem",
+                    "lg": "0.5rem",
+                    "xl": "0.75rem",
+                    "full": "9999px"
+            },
+            "spacing": {
+                    "margin-desktop": "48px",
+                    "container-max": "1280px",
+                    "margin-mobile": "16px",
+                    "unit": "4px",
+                    "gutter": "24px"
+            },
+            "fontFamily": {
+                    "headline-lg-mobile": ["Inter"],
+                    "label-sm": ["Inter"],
+                    "headline-md": ["Inter"],
+                    "display-lg": ["Inter"],
+                    "body-lg": ["Inter"],
+                    "body-md": ["Inter"],
+                    "headline-lg": ["Inter"],
+                    "label-md": ["Inter"]
+            },
+            "fontSize": {
+                    "headline-lg-mobile": ["24px", {"lineHeight": "1.2", "fontWeight": "600"}],
+                    "label-sm": ["12px", {"lineHeight": "1.2", "letterSpacing": "0.02em", "fontWeight": "600"}],
+                    "headline-md": ["24px", {"lineHeight": "1.3", "fontWeight": "500"}],
+                    "display-lg": ["48px", {"lineHeight": "1.1", "letterSpacing": "-0.02em", "fontWeight": "600"}],
+                    "body-lg": ["18px", {"lineHeight": "1.6", "fontWeight": "400"}],
+                    "body-md": ["16px", {"lineHeight": "1.5", "fontWeight": "400"}],
+                    "headline-lg": ["32px", {"lineHeight": "1.2", "letterSpacing": "-0.01em", "fontWeight": "600"}],
+                    "label-md": ["14px", {"lineHeight": "1.4", "letterSpacing": "0.05em", "fontWeight": "500"}]
+            }
+          },
+        },
+      }
+    </script>
+</head>
+<body class="bg-background text-on-background font-body-md flex items-center justify-center min-h-screen selection:bg-primary selection:text-on-primary">
+<!-- Atmospheric background layer -->
+<div class="fixed inset-0 z-0 opacity-20 pointer-events-none">
+<div class="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-primary/20 blur-[120px] rounded-full"></div>
+<div class="absolute bottom-[-10%] right-[-10%] w-[50%] h-[50%] bg-surface-container-highest/30 blur-[150px] rounded-full"></div>
+</div>
+<!-- Login Container -->
+<main class="relative z-10 w-full max-w-[440px] px-margin-mobile md:px-0">
+<!-- Brand Identity -->
+<div class="flex flex-col items-center mb-10 space-y-2">
+<div class="w-12 h-12 bg-primary flex items-center justify-center rounded mb-4 shadow-lg shadow-primary/10">
+<span class="material-symbols-outlined text-on-primary" style="font-variation-settings: 'FILL' 1;">account_balance</span>
+</div>
+<h1 class="font-headline-lg text-headline-lg text-primary tracking-widest uppercase">FinEdge</h1>
+<p class="font-label-md text-label-md text-on-surface-variant tracking-widest uppercase opacity-70">Wealth Management Portal</p>
+</div>
+<!-- Login Card -->
+<div class="bg-surface-container-low border border-outline-variant p-10 shadow-2xl relative">
+<!-- Top Golden Accent Line -->
+<div class="absolute top-0 left-0 right-0 h-[1px] bg-primary"></div>
+<form class="space-y-8" onsubmit="return false;">
+<!-- Email Field -->
+<div class="space-y-2">
+<label class="block font-label-md text-label-md text-on-surface-variant uppercase tracking-widest" for="email">
+                        Corporate Email
+                    </label>
+<div class="relative group">
+<input class="w-full bg-surface-container-highest border border-outline-variant px-4 py-3.5 text-on-surface focus:outline-none focus:border-primary transition-colors placeholder:text-surface-variant" id="email" name="email" placeholder="executive@finedge.com" type="email"/>
+<div class="absolute inset-y-0 right-4 flex items-center pointer-events-none text-outline group-focus-within:text-primary transition-colors">
+<span class="material-symbols-outlined">alternate_email</span>
+</div>
+</div>
+</div>
+<!-- Password Field -->
+<div class="space-y-2">
+<div class="flex justify-between items-center">
+<label class="block font-label-md text-label-md text-on-surface-variant uppercase tracking-widest" for="password">
+                            Passcode
+                        </label>
+<a class="text-[10px] uppercase tracking-tighter text-outline hover:text-primary transition-colors" href="#">
+                            Forgot?
+                        </a>
+</div>
+<div class="relative group">
+<input class="w-full bg-surface-container-highest border border-outline-variant px-4 py-3.5 text-on-surface focus:outline-none focus:border-primary transition-colors placeholder:text-surface-variant" id="password" name="password" placeholder="••••••••" type="password"/>
+<div class="absolute inset-y-0 right-4 flex items-center pointer-events-none text-outline group-focus-within:text-primary transition-colors">
+<span class="material-symbols-outlined">lock</span>
+</div>
+</div>
+</div>
+<!-- Remember Me & MFA note -->
+<div class="flex items-center justify-between py-1">
+<label class="flex items-center cursor-pointer group">
+<input class="hidden peer" type="checkbox"/>
+<div class="w-4 h-4 border border-outline-variant bg-surface-container-highest peer-checked:bg-primary peer-checked:border-primary flex items-center justify-center transition-all">
+<span class="material-symbols-outlined text-[12px] text-on-primary hidden peer-checked:block" style="font-variation-settings: 'FILL' 1;">check</span>
+</div>
+<span class="ml-2 font-label-md text-label-sm text-on-surface-variant group-hover:text-on-surface transition-colors">Secure Remember</span>
+</label>
+</div>
+<!-- Primary CTA -->
+<button class="w-full bg-primary py-4 text-on-primary font-label-md text-label-md uppercase tracking-[0.2em] font-bold hover:brightness-110 active:scale-[0.98] transition-all flex items-center justify-center space-x-2 shadow-lg shadow-primary/20" type="submit">
+<span>Log In</span>
+<span class="material-symbols-outlined text-sm">arrow_forward</span>
+</button>
+</form>
+<!-- Secondary Action -->
+<div class="mt-8 pt-8 border-t border-outline-variant/30 text-center">
+<p class="font-label-sm text-label-sm text-on-surface-variant opacity-60">
+                    Access restricted to authorized personnel only. 
+                </p>
+<a class="inline-block mt-4 text-primary font-label-sm text-label-sm hover:underline tracking-widest uppercase" href="#">
+                    Contact Support
+                </a>
+</div>
+</div>
+<!-- External Footer -->
+<div class="mt-12 flex justify-between px-2 text-[10px] text-outline uppercase tracking-[0.1em]">
+<span>© 2024 FinEdge Asset Management</span>
+<div class="flex space-x-4">
+<a class="hover:text-on-surface transition-colors" href="#">Privacy</a>
+<a class="hover:text-on-surface transition-colors" href="#">Legal</a>
+</div>
+</div>
+</main>
+<!-- Interactive Layer for Micro-Interactions -->
+<script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const inputs = document.querySelectorAll('input');
+            
+            inputs.forEach(input => {
+                input.addEventListener('focus', () => {
+                    // Subtle scale effect on card when focused
+                    document.querySelector('.bg-surface-container-low').classList.add('border-primary/40');
+                });
+                
+                input.addEventListener('blur', () => {
+                    document.querySelector('.bg-surface-container-low').classList.remove('border-primary/40');
+                });
+            });
+
+            // Fake login interaction
+            const form = document.querySelector('form');
+            const btn = form.querySelector('button');
+            
+            form.addEventListener('submit', (e) => {
+                const btnText = btn.querySelector('span:first-child');
+                const originalText = btnText.innerText;
+                
+                btnText.innerText = "Authenticating...";
+                btn.style.opacity = "0.7";
+                btn.disabled = true;
+                
+                setTimeout(() => {
+                    btnText.innerText = originalText;
+                    btn.style.opacity = "1";
+                    btn.disabled = false;
+                    alert('Identity verified. Redirecting to FinEdge Executive Dashboard.');
+                }, 1500);
+            });
+        });
+    </script>
+</body></html>
