@@ -110,7 +110,7 @@ src/
 │   └── validator.js
 ├── utils/
 │   ├── analytics.js
-│   └── aiHelper.js
+│   └── insightHelper.js
 └── data/
     ├── users.json
     └── transactions.json

@@ -78,7 +78,7 @@ This document details the critical edge cases, structural limitations, security 
 - **Description**: A user logs expenses but has zero income (`totalIncome === 0`).
 - **Impact**: The AI/analytics engine throws a `NaN` or `Infinity` error when calculating the savings ratio (`totalExpenses / totalIncome`).
 - **Mitigation**:
-  - Safeguard the calculation in `src/utils/analytics.js` and `src/utils/aiHelper.js`:
+  - Safeguard the calculation in `src/utils/analytics.js` and `src/utils/insightHelper.js`:
     ```javascript
     const savingsRatio = totalIncome > 0 ? (totalExpenses / totalIncome) : 0;
     ```

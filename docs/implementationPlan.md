@@ -32,7 +32,7 @@ FinEdge/
 │   │   └── validator.js       # Payload fields validator (express-validator)
 │   ├── utils/
 │   │   ├── analytics.js       # Summary & category calculations
-│   │   └── aiHelper.js        # Rule-based spending warnings & budget alerts
+│   │   └── insightHelper.js   # Rule-based spending warnings & budget alerts
 │   └── data/
 │       ├── users.json         # Stores user profiles list (JSON format)
 │       └── transactions.json  # Stores transaction records list (JSON format)
@@ -197,7 +197,7 @@ FinEdge/
      - `totalExpenses`: Total of all expense transactions.
      - `netBalance`: Net amount (`income - expenses`).
      - `categoryBreakdown`: Group expenses by category (e.g., `{ "food": 150, "bills": 350 }`).
-2. **Implement `src/utils/aiHelper.js`**:
+2. **Implement `src/utils/insightHelper.js`**:
    - Build rule-based analysis generating insight strings:
      - Savings alert: Trigger warnings if expenses exceed 70% of total income.
      - Budget warnings: Identify category spend peaks.

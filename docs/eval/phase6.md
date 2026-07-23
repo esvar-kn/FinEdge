@@ -6,7 +6,7 @@ This document outlines the evaluation targets and verification tests for Phase 6
 
 ## 1. Evaluation Objectives
 - Verify calculations inside `analytics.js` (total income, total expense, savings rates, and category group spend sums).
-- Confirm rules inside `aiHelper.js` trigger alerts correctly based on balance thresholds (e.g. expenses exceeding 70% of income).
+- Confirm rules inside `insightHelper.js` trigger alerts correctly based on balance thresholds (e.g. expenses exceeding 70% of income).
 - Ensure that the `/summary` route aggregates both quantitative calculations and qualitative advice.
 
 ---

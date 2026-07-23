@@ -43,7 +43,7 @@ graph TB
         UserService[User Service]
         TxService[Transaction Service]
         Analytics[Analytics Utility]
-        AIHelper[AI Insights Helper]
+        InsightHelper[Insight Helper]
     end
 
     subgraph Data Access Layer (Models)
@@ -75,7 +75,7 @@ graph TB
     
     %% Calculations & Helper integrations
     TxService --> Analytics
-    TxService --> AIHelper
+    TxService --> InsightHelper
     
     %% Database / File Layer
     UserService --> UserModel
@@ -330,7 +330,7 @@ Calculates the basic financial summaries:
 - **Net Balance**: `Total Income - Total Expenses`.
 - **Category Summary**: An aggregated dictionary (e.g., `{ "food": 500, "rent": 1200 }`) indicating spending per category.
 
-### 6.2. AI Insights Engine (`src/utils/aiHelper.js`)
+### 6.2. Insights Helper (`src/utils/insightHelper.js`)
 Generates logical rules or LLM prompts for monthly insights. The engine looks for financial patterns:
 - **Budget Breaches**: Flagging categories where spending exceeds historical or predetermined margins.
 - **Savings Ratio Check**: Alerting the user if expenses exceed 70% of total income.
