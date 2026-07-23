@@ -61,13 +61,30 @@ db.exec(`
   );
 
   CREATE INDEX IF NOT EXISTS idx_recurring_userId ON recurring_rules(userId);
+
+  CREATE TABLE IF NOT EXISTS savings_goals (
+    id          TEXT PRIMARY KEY,
+    userId      TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    name        TEXT NOT NULL,
+    targetCents INTEGER NOT NULL CHECK (targetCents > 0),
+    savedCents  INTEGER NOT NULL DEFAULT 0 CHECK (savedCents >= 0),
+    deadline    TEXT,
+    createdAt   TEXT NOT NULL,
+    updatedAt   TEXT
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_goals_userId ON savings_goals(userId);
 `);
 
-// Lightweight migration for databases created before recurring support:
-// transactions gained a nullable recurringRuleId column for traceability.
+// Lightweight migrations for databases created before a column existed.
 const txColumns = db.prepare("PRAGMA table_info('transactions')").all().map(c => c.name);
 if (!txColumns.includes('recurringRuleId')) {
   db.exec('ALTER TABLE transactions ADD COLUMN recurringRuleId TEXT');
+}
+
+const userColumns = db.prepare("PRAGMA table_info('users')").all().map(c => c.name);
+if (!userColumns.includes('currency')) {
+  db.exec("ALTER TABLE users ADD COLUMN currency TEXT NOT NULL DEFAULT 'USD'");
 }
 
 export default db;

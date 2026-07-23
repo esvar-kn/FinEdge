@@ -18,6 +18,23 @@ class RecurringController {
   }
 
   /**
+   * Upcoming bill reminders within ?days=N (default 30, max 365).
+   */
+  static async getUpcoming(req, res, next) {
+    try {
+      const days = Math.min(Math.max(parseInt(req.query.days, 10) || 30, 1), 365);
+      const upcoming = await RecurringService.getUpcoming(req.userId, days);
+      res.status(200).json({
+        status: 'success',
+        results: upcoming.length,
+        data: { days, upcoming }
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
    * Creates a recurring rule; past-dated startDates backfill immediately.
    */
   static async createRule(req, res, next) {

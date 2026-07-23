@@ -51,6 +51,36 @@ class UserController {
   }
 
   /**
+   * Returns the authenticated user's settings and supported currency options.
+   */
+  static async getSettings(req, res, next) {
+    try {
+      const settings = await UserService.getSettings(req.userId);
+      res.status(200).json({
+        status: 'success',
+        data: settings
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * Updates the authenticated user's settings (currency).
+   */
+  static async updateSettings(req, res, next) {
+    try {
+      const user = await UserService.updateSettings(req.userId, { currency: req.body.currency });
+      res.status(200).json({
+        status: 'success',
+        data: { user }
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
    * Changes the authenticated user's password.
    */
   static async changePassword(req, res, next) {

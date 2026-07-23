@@ -221,6 +221,51 @@ export function validateRecurringRule(req, res, next) {
 }
 
 /**
+ * Validates savings-goal creation payloads.
+ */
+export function validateGoal(req, res, next) {
+  const { name, target, saved, deadline } = req.body;
+  const errors = [];
+
+  if (!name || typeof name !== 'string' || name.trim().length === 0) {
+    errors.push('Name must be a non-empty string.');
+  }
+
+  const parsedTarget = parseFloat(target);
+  if (target === undefined || isNaN(parsedTarget) || parsedTarget <= 0) {
+    errors.push('Target must be a positive number greater than 0.');
+  }
+
+  if (saved !== undefined) {
+    const parsedSaved = parseFloat(saved);
+    if (isNaN(parsedSaved) || parsedSaved < 0) {
+      errors.push('Saved must be a number of 0 or more.');
+    }
+  }
+
+  if (deadline !== undefined && deadline && !normalizeDate(deadline)) {
+    errors.push('Deadline must be a valid YYYY-MM-DD or ISO-8601 date string.');
+  }
+
+  if (errors.length > 0) {
+    return next(new AppError(errors.join(' | '), 400));
+  }
+
+  next();
+}
+
+/**
+ * Validates a goal contribution payload ({ amount }).
+ */
+export function validateContribution(req, res, next) {
+  const parsed = parseFloat(req.body.amount);
+  if (req.body.amount === undefined || isNaN(parsed) || parsed === 0) {
+    return next(new AppError('Amount must be a non-zero number.', 400));
+  }
+  next();
+}
+
+/**
  * Authentication middleware: verifies the Bearer JWT and attaches req.userId.
  */
 export function requireAuth(req, res, next) {

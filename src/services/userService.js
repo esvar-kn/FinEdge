@@ -3,6 +3,7 @@ import jwt from 'jsonwebtoken';
 import config from '../config/index.js';
 import UserModel from '../models/userModel.js';
 import { AppError } from '../middleware/errorHandler.js';
+import { isSupportedCurrency, SUPPORTED_CURRENCIES } from '../utils/currency.js';
 
 class UserService {
   /**
@@ -35,7 +36,12 @@ class UserService {
 
     let newUser;
     try {
-      newUser = await UserModel.create({ username, email, password: hashedPassword });
+      newUser = await UserModel.create({
+        username,
+        email,
+        password: hashedPassword,
+        currency: config.defaultCurrency
+      });
     } catch (error) {
       // UNIQUE constraint backstop: two simultaneous registrations can both
       // pass the pre-checks above, but only one insert can win.
@@ -83,6 +89,37 @@ class UserService {
     }
     const { password: _pw, ...userWithoutPassword } = rawUser;
     return userWithoutPassword;
+  }
+
+  /**
+   * Returns the user's settings plus the list of supported currencies (so a
+   * client can render a picker without hardcoding the options).
+   * @param {string} userId
+   * @returns {Promise<Object>}
+   */
+  static async getSettings(userId) {
+    const user = await this.getProfile(userId);
+    return {
+      currency: user.currency,
+      supportedCurrencies: SUPPORTED_CURRENCIES
+    };
+  }
+
+  /**
+   * Updates the user's settings (currently just currency) and returns the
+   * refreshed profile.
+   * @param {string} userId
+   * @param {Object} updates {currency}
+   * @returns {Promise<Object>}
+   */
+  static async updateSettings(userId, updates) {
+    if (updates.currency !== undefined) {
+      if (!isSupportedCurrency(updates.currency)) {
+        throw new AppError('Unsupported currency code.', 400);
+      }
+      await UserModel.updateCurrency(userId, updates.currency.toUpperCase());
+    }
+    return this.getProfile(userId);
   }
 
   /**

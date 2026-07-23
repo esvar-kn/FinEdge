@@ -5,3 +5,4 @@ import './concurrency.suite.js';
 import './features.suite.js';
 import './highimpact.suite.js';
 import './lowimpact.suite.js';
+import './enhancements.suite.js';

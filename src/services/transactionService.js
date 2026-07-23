@@ -1,10 +1,11 @@
 import TransactionModel from '../models/transactionModel.js';
+import RecurringModel from '../models/recurringModel.js';
 import BudgetService from './budgetService.js';
 import RecurringService from './recurringService.js';
 import CategoryService from './categoryService.js';
 import { AppError } from '../middleware/errorHandler.js';
 import { generateInsights } from '../utils/insightHelper.js';
-import { normalizeDate, monthRange, currentMonth } from '../utils/dates.js';
+import { normalizeDate, monthRange, currentMonth, advanceDate } from '../utils/dates.js';
 import { toCSV, parseCSV } from '../utils/csv.js';
 
 const CSV_HEADERS = ['id', 'type', 'category', 'amount', 'description', 'date'];
@@ -60,6 +61,72 @@ class TransactionService {
   static async getMonthlyTrend(userId, months) {
     await RecurringService.materializeDueRules(userId);
     return TransactionModel.monthlyTrend(userId, months);
+  }
+
+  /**
+   * Year report: per-month income/expense, yearly totals, and category
+   * breakdown (recurring materialized first so scheduled entries count).
+   * @param {string} userId
+   * @param {number} year
+   * @returns {Promise<Object>}
+   */
+  static async getYearReport(userId, year) {
+    await RecurringService.materializeDueRules(userId);
+    return TransactionModel.yearReport(userId, year);
+  }
+
+  /**
+   * Projects the current month's end-of-month position: actuals recorded so
+   * far this month plus recurring rules still scheduled to fire before month
+   * end. Returns actual, scheduled, and projected income/expense/net.
+   * @param {string} userId
+   * @returns {Promise<Object>}
+   */
+  static async getForecast(userId) {
+    await RecurringService.materializeDueRules(userId);
+
+    const month = currentMonth();
+    const { from, toExclusive } = monthRange(month);
+    const actual = await TransactionModel.summarize(userId, { from, toExclusive });
+
+    // Sum recurring runs that will still fire between now and month end.
+    const nowIso = new Date().toISOString();
+    let scheduledIncome = 0;
+    let scheduledExpenses = 0;
+    for (const rule of await RecurringModel.findByUserId(userId)) {
+      let runDate = rule.nextRunDate;
+      while (runDate < toExclusive) {
+        const pastEnd = rule.endDate && runDate > rule.endDate;
+        if (runDate >= nowIso && !pastEnd) {
+          if (rule.type === 'income') scheduledIncome += rule.amount;
+          else scheduledExpenses += rule.amount;
+        }
+        if (pastEnd) break;
+        runDate = advanceDate(runDate, rule.frequency, rule.anchorDay);
+      }
+    }
+
+    const round = (n) => Math.round(n * 100) / 100;
+    const projectedIncome = round(actual.totalIncome + scheduledIncome);
+    const projectedExpenses = round(actual.totalExpenses + scheduledExpenses);
+
+    return {
+      month,
+      actual: {
+        income: actual.totalIncome,
+        expenses: actual.totalExpenses,
+        net: actual.netBalance
+      },
+      scheduled: {
+        income: round(scheduledIncome),
+        expenses: round(scheduledExpenses)
+      },
+      projected: {
+        income: projectedIncome,
+        expenses: projectedExpenses,
+        net: round(projectedIncome - projectedExpenses)
+      }
+    };
   }
 
   /**

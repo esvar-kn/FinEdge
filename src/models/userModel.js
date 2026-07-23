@@ -53,14 +53,26 @@ class UserModel {
       username: userData.username,
       email: userData.email,
       password: userData.password,
+      currency: userData.currency,
       createdAt: new Date().toISOString()
     };
     db.prepare(
-      'INSERT INTO users (id, username, email, password, createdAt) VALUES (@id, @username, @email, @password, @createdAt)'
+      'INSERT INTO users (id, username, email, password, currency, createdAt) VALUES (@id, @username, @email, @password, @currency, @createdAt)'
     ).run(newUser);
 
     const { password: _pw, ...userWithoutPassword } = newUser;
     return userWithoutPassword;
+  }
+
+  /**
+   * Updates the user's currency preference.
+   * @param {string} id
+   * @param {string} currency ISO code (already validated by the service)
+   * @returns {Promise<boolean>} True if a record was updated.
+   */
+  static async updateCurrency(id, currency) {
+    const info = db.prepare('UPDATE users SET currency = ? WHERE id = ?').run(currency, id);
+    return info.changes > 0;
   }
 
   /**

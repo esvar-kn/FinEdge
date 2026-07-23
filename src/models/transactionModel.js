@@ -181,6 +181,63 @@ class TransactionModel {
   }
 
   /**
+   * Per-month income/expense totals for a calendar year (12 rows, empty months
+   * zero-filled), plus the year's total income/expense and expense-by-category.
+   * @param {string} userId
+   * @param {number} year
+   * @returns {Promise<Object>}
+   */
+  static async yearReport(userId, year) {
+    const from = `${year}-01-01T00:00:00.000Z`;
+    const toExclusive = `${year + 1}-01-01T00:00:00.000Z`;
+
+    const monthRows = db
+      .prepare(
+        `SELECT SUBSTR(date, 6, 2) AS mm,
+                COALESCE(SUM(CASE WHEN type = 'income' THEN amountCents END), 0) AS incomeCents,
+                COALESCE(SUM(CASE WHEN type = 'expense' THEN amountCents END), 0) AS expenseCents
+         FROM transactions
+         WHERE userId = ? AND date >= ? AND date < ?
+         GROUP BY SUBSTR(date, 6, 2)`
+      )
+      .all(userId, from, toExclusive);
+
+    const byMonth = new Map(monthRows.map(r => [r.mm, r]));
+    const months = [];
+    let incomeCents = 0;
+    let expenseCents = 0;
+    for (let m = 1; m <= 12; m++) {
+      const mm = String(m).padStart(2, '0');
+      const row = byMonth.get(mm);
+      const inc = row ? row.incomeCents : 0;
+      const exp = row ? row.expenseCents : 0;
+      incomeCents += inc;
+      expenseCents += exp;
+      months.push({ month: `${year}-${mm}`, income: toAmount(inc), expenses: toAmount(exp) });
+    }
+
+    const categoryRows = db
+      .prepare(
+        `SELECT LOWER(TRIM(category)) AS category, SUM(amountCents) AS cents
+         FROM transactions
+         WHERE userId = ? AND type = 'expense' AND date >= ? AND date < ?
+         GROUP BY LOWER(TRIM(category)) ORDER BY cents DESC`
+      )
+      .all(userId, from, toExclusive);
+    const categoryBreakdown = {};
+    for (const r of categoryRows) categoryBreakdown[r.category] = toAmount(r.cents);
+
+    return {
+      year,
+      totalIncome: toAmount(incomeCents),
+      totalExpenses: toAmount(expenseCents),
+      netBalance: toAmount(incomeCents - expenseCents),
+      months,
+      categoryBreakdown
+    };
+  }
+
+  /**
    * Sum of expenses per category (lowercased) within a date range, in cents —
    * used for budget tracking without float conversion.
    * @param {string} userId

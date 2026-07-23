@@ -16,6 +16,30 @@ class RecurringService {
   }
 
   /**
+   * Upcoming bill reminders: rules whose next run falls within the next
+   * `days` days (materializing due ones first so nextRunDate is current).
+   * Each entry includes daysUntil for easy "due in N days" display.
+   * @param {string} userId
+   * @param {number} days
+   * @returns {Promise<Array<Object>>}
+   */
+  static async getUpcoming(userId, days) {
+    await this.materializeDueRules(userId);
+    const now = new Date();
+    const horizon = new Date(now);
+    horizon.setUTCDate(horizon.getUTCDate() + days);
+    const horizonIso = horizon.toISOString();
+
+    return (await RecurringModel.findByUserId(userId))
+      .filter(r => r.nextRunDate <= horizonIso && (!r.endDate || r.nextRunDate <= r.endDate))
+      .map(r => ({
+        ...r,
+        daysUntil: Math.max(0, Math.ceil((new Date(r.nextRunDate) - now) / (24 * 60 * 60 * 1000)))
+      }))
+      .sort((a, b) => a.nextRunDate.localeCompare(b.nextRunDate));
+  }
+
+  /**
    * Creates a rule and immediately materializes any runs already due
    * (a startDate in the past backfills its transactions right away).
    * @param {string} userId

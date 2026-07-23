@@ -31,6 +31,8 @@ export const config = {
   // AI insights (optional): without an API key the endpoint falls back to rules
   groqApiKey: process.env.GROQ_API_KEY || '',
   aiModel: process.env.AI_MODEL || 'llama-3.3-70b-versatile',
+  // Default currency for new accounts (must be a code in SUPPORTED_CURRENCIES)
+  defaultCurrency: process.env.DEFAULT_CURRENCY || 'USD',
   // Security hardening
   corsOrigin: process.env.CORS_ORIGIN || '', // empty = no CORS headers (same-origin only)
   authRateLimitMax: parseInt(process.env.AUTH_RATE_LIMIT_MAX || '30', 10),

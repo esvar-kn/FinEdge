@@ -95,6 +95,42 @@ class TransactionController {
   }
 
   /**
+   * Projects the current month's end-of-month income/expense/net from actuals
+   * so far plus recurring rules still due before month end.
+   */
+  static async getForecast(req, res, next) {
+    try {
+      const forecast = await TransactionService.getForecast(req.userId);
+      res.status(200).json({
+        status: 'success',
+        data: { forecast }
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * Year report: per-month totals and category breakdown for ?year=YYYY
+   * (defaults to the current year).
+   */
+  static async getYearReport(req, res, next) {
+    try {
+      const year = parseInt(req.query.year, 10) || new Date().getUTCFullYear();
+      if (year < 1970 || year > 9999) {
+        throw new AppError("Invalid 'year'. Use a four-digit year, e.g. ?year=2026.", 400);
+      }
+      const report = await TransactionService.getYearReport(req.userId, year);
+      res.status(200).json({
+        status: 'success',
+        data: { report }
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
    * Exports transactions as a CSV download. Honors the same filters as the
    * list endpoint (type, category, q, from, to).
    */

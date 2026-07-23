@@ -13,6 +13,8 @@ router.get('/', TransactionController.getTransactions);
 router.get('/summary', TransactionController.getTransactionSummary);
 router.get('/ai-insights', TransactionController.getAiInsights);
 router.get('/trend', TransactionController.getMonthlyTrend);
+router.get('/forecast', TransactionController.getForecast);
+router.get('/report', TransactionController.getYearReport);
 router.get('/export', TransactionController.exportTransactions);
 router.post(
   '/import',

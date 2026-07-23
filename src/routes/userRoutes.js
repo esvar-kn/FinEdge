@@ -16,6 +16,8 @@ router.post('/login', authLimiter, validateLogin, UserController.login);
 
 // Account management (authenticated)
 router.get('/me', requireAuth, UserController.getProfile);
+router.get('/settings', requireAuth, UserController.getSettings);
+router.put('/settings', requireAuth, UserController.updateSettings);
 router.put('/password', authLimiter, requireAuth, validatePasswordChange, UserController.changePassword);
 router.delete('/me', requireAuth, validateAccountDelete, UserController.deleteAccount);
 

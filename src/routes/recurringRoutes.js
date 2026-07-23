@@ -7,6 +7,7 @@ const router = Router();
 router.use(requireAuth);
 
 router.get('/', RecurringController.getRules);
+router.get('/upcoming', RecurringController.getUpcoming);
 router.post('/', validateRecurringRule, RecurringController.createRule);
 router.delete('/:id', RecurringController.deleteRule);
 
