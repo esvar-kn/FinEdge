@@ -15,8 +15,9 @@ FinEdge is a clean, modular RESTful API backend for tracking personal finances �
 | Goals | Savings goals with target, deadline, contributions, and progress tracking |
 | Currency | Per-user display currency (10 supported) reflected across the whole app |
 | Insights | Rule-based advice out of the box; optional AI-generated advice via the Groq API (free tier); month-end forecast, bill reminders, and year reports |
+| Accounts | Register, login with optional "remember me" (30-day token), password reset, profile, account deletion |
 | Security | JWT auth, bcrypt hashing, helmet headers, opt-in CORS, rate-limited auth endpoints |
-| Reliability | WAL-mode SQLite, foreign keys with cascade, daily backups with retention, 70 automated tests |
+| Reliability | WAL-mode SQLite, foreign keys with cascade, daily backups with retention, 77 automated tests |
 | Frontend | Connected single-page web UI (served by the backend) with an installable PWA manifest |
 
 ---
@@ -89,7 +90,8 @@ FinEdge/
 │   ├── features.suite.js          # Pagination, search, sorting, account management
 │   ├── highimpact.suite.js        # Dates, budgets, recurring rules, CSV
 │   ├── lowimpact.suite.js         # Categories, AI insights, security headers
-│   └── enhancements.suite.js      # Currency, goals, reminders, forecast, report
+│   ├── enhancements.suite.js      # Currency, goals, reminders, forecast, report
+│   └── auth-recovery.suite.js     # Password reset and remember-me
 ├── FrontEnd/                      # Web UI assets and design mockups (work in progress)
 ├── .env.example                   # Environment configuration template
 ├── .gitignore                     # Excluded workspace files (DB, backups, secrets)
@@ -117,7 +119,9 @@ FinEdge/
    | `PORT` | `3000` | HTTP listen port |
    | `NODE_ENV` | `development` | Environment name (`test` disables rate limiting) |
    | `JWT_SECRET` | — | **Required.** Token signing key; the server refuses to start without it |
-   | `JWT_EXPIRES_IN` | `7d` | Token lifetime |
+   | `JWT_EXPIRES_IN` | `7d` | Default token lifetime |
+   | `JWT_REMEMBER_EXPIRES_IN` | `30d` | Token lifetime when "remember me" is used |
+   | `RESET_TOKEN_TTL_MS` | `3600000` | Password-reset token lifetime (1 hour) |
    | `DB_PATH` | `src/data/finedge.db` | SQLite database file |
    | `BACKUP_DIR` | `src/data/backups` | Where daily snapshots are written |
    | `BACKUP_KEEP` | `7` | Number of snapshots retained |
@@ -157,7 +161,7 @@ FinEdge/
 ## Testing
 
 ```bash
-npm test              # run all 70 tests
+npm test              # run all 77 tests
 npm run test:coverage # run with c8 coverage reporting
 ```
 
@@ -177,7 +181,9 @@ Base URL: `http://localhost:3000`. All routes except registration, login, and th
 | Method | Endpoint | Auth | Description | Payload Schema |
 | :--- | :--- | :--- | :--- | :--- |
 | **POST** | `/api/users/register` | — | Registers a new account, hashes the password, and returns a signed JWT | `{ "username": "min-3", "email": "email", "password": "min-6" }` |
-| **POST** | `/api/users/login` | — | Validates credentials and returns a signed JWT | `{ "email": "email", "password": "password" }` |
+| **POST** | `/api/users/login` | — | Validates credentials and returns a signed JWT; `rememberMe: true` issues a 30-day token | `{ "email": "email", "password": "password", "rememberMe"? }` |
+| **POST** | `/api/users/forgot-password` | — | Starts a password reset; always 200 (no email enumeration). See Password Reset below | `{ "email": "email" }` |
+| **POST** | `/api/users/reset-password` | — | Completes a reset with a valid, unexpired token | `{ "token": "string", "newPassword": "min-6" }` |
 | **GET** | `/api/users/me` | Bearer | Returns the authenticated user's profile (includes `currency`) | — |
 | **GET** | `/api/users/settings` | Bearer | Returns settings (`currency`) and the list of supported currencies | — |
 | **PUT** | `/api/users/settings` | Bearer | Updates settings; validates the currency code | `{ "currency": "USD" }` |
@@ -266,6 +272,18 @@ Currency is a **per-user display preference** set via `PUT /api/users/settings` 
 Groq's free tier requires no payment method, and the integration uses Node's built-in `fetch` — no extra dependency. Override the model with `AI_MODEL` in `.env`.
 
 > The advice covers budgeting and spending habits only. FinEdge is not a licensed financial advisor and does not make investment recommendations.
+
+---
+
+## Password Reset
+
+FinEdge ships a standard token-based reset flow that works without email infrastructure — ideal for a self-hosted family setup:
+
+1. A user (or the login screen's **Forgot?** form) calls `POST /api/users/forgot-password` with their email. The response is always a generic 200 so email addresses can't be enumerated.
+2. When the email matches an account, a one-time reset token is generated, stored **hashed** with a 1-hour expiry, and **printed to the server console** — the operator (you) relays it to the family member. In a hosted deployment you'd send it by email instead; the log line marks exactly where.
+3. The user submits the token and a new password to `POST /api/users/reset-password`. The token is single-use and cleared on success.
+
+Reset endpoints are rate-limited alongside login/register. Configure the token lifetime with `RESET_TOKEN_TTL_MS` and the remember-me token duration with `JWT_REMEMBER_EXPIRES_IN`.
 
 ---
 
