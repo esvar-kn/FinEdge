@@ -57,6 +57,39 @@ export function validateLogin(req, res, next) {
 }
 
 /**
+ * Validates a forgot-password payload (just an email).
+ */
+export function validateForgotPassword(req, res, next) {
+  const { email } = req.body;
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  if (!email || typeof email !== 'string' || !emailRegex.test(email)) {
+    return next(new AppError('A valid email address is required.', 400));
+  }
+  next();
+}
+
+/**
+ * Validates a reset-password payload (token + new password).
+ */
+export function validateResetPassword(req, res, next) {
+  const { token, newPassword } = req.body;
+  const errors = [];
+
+  if (!token || typeof token !== 'string') {
+    errors.push('Reset token is required.');
+  }
+  if (!newPassword || typeof newPassword !== 'string' || newPassword.length < 6) {
+    errors.push('New password must be a string and contain at least 6 characters.');
+  }
+
+  if (errors.length > 0) {
+    return next(new AppError(errors.join(' | '), 400));
+  }
+
+  next();
+}
+
+/**
  * Validates password-change payloads.
  */
 export function validatePasswordChange(req, res, next) {

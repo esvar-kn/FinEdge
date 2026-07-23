@@ -26,6 +26,11 @@ export const config = {
   port: process.env.PORT || 3000,
   jwtSecret: JWT_SECRET,
   jwtExpiresIn: process.env.JWT_EXPIRES_IN || '7d',
+  // "Remember me" issues a longer-lived token so family members aren't forced
+  // to re-login weekly.
+  jwtRememberExpiresIn: process.env.JWT_REMEMBER_EXPIRES_IN || '30d',
+  // Password-reset token lifetime (ms). Default 1 hour.
+  resetTokenTtlMs: parseInt(process.env.RESET_TOKEN_TTL_MS || String(60 * 60 * 1000), 10),
   savingsWarningThreshold: parseFloat(process.env.SAVINGS_WARNING_THRESHOLD || '0.70'),
   dbPath: path.resolve(process.env.DB_PATH || 'src/data/finedge.db'),
   // AI insights (optional): without an API key the endpoint falls back to rules

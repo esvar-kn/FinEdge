@@ -76,6 +76,40 @@ class UserModel {
   }
 
   /**
+   * Stores a password-reset token hash and its expiry (ISO string) on a user.
+   * @param {string} id
+   * @param {string} tokenHash
+   * @param {string} expiresIso
+   * @returns {Promise<void>}
+   */
+  static async setResetToken(id, tokenHash, expiresIso) {
+    db.prepare('UPDATE users SET resetTokenHash = ?, resetTokenExpires = ? WHERE id = ?')
+      .run(tokenHash, expiresIso, id);
+  }
+
+  /**
+   * Finds a user by an unexpired reset-token hash. Returns null if no match or
+   * the token has expired.
+   * @param {string} tokenHash
+   * @param {string} nowIso
+   * @returns {Promise<Object|null>}
+   */
+  static async findByResetTokenHash(tokenHash, nowIso) {
+    return db
+      .prepare('SELECT * FROM users WHERE resetTokenHash = ? AND resetTokenExpires > ?')
+      .get(tokenHash, nowIso) || null;
+  }
+
+  /**
+   * Clears any reset token on a user (called after a successful reset).
+   * @param {string} id
+   * @returns {Promise<void>}
+   */
+  static async clearResetToken(id) {
+    db.prepare('UPDATE users SET resetTokenHash = NULL, resetTokenExpires = NULL WHERE id = ?').run(id);
+  }
+
+  /**
    * Replaces a user's password hash.
    * @param {string} id
    * @param {string} hashedPassword

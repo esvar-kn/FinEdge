@@ -1,18 +1,32 @@
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
+import crypto from 'crypto';
 import config from '../config/index.js';
 import UserModel from '../models/userModel.js';
 import { AppError } from '../middleware/errorHandler.js';
 import { isSupportedCurrency, SUPPORTED_CURRENCIES } from '../utils/currency.js';
 
+/** Strips secret/internal columns before a user record leaves the service. */
+function sanitize(rawUser) {
+  const { password, resetTokenHash, resetTokenExpires, ...safe } = rawUser;
+  return safe;
+}
+
+/** SHA-256 of a reset token — high-entropy tokens don't need bcrypt. */
+function hashToken(token) {
+  return crypto.createHash('sha256').update(token).digest('hex');
+}
+
 class UserService {
   /**
    * Signs a JWT for the given user id.
    * @param {string} userId
+   * @param {boolean} [rememberMe] Issue a longer-lived token.
    * @returns {string}
    */
-  static signToken(userId) {
-    return jwt.sign({ id: userId }, config.jwtSecret, { expiresIn: config.jwtExpiresIn });
+  static signToken(userId, rememberMe = false) {
+    const expiresIn = rememberMe ? config.jwtRememberExpiresIn : config.jwtExpiresIn;
+    return jwt.sign({ id: userId }, config.jwtSecret, { expiresIn });
   }
 
   /**
@@ -60,7 +74,7 @@ class UserService {
    * @param {string} password
    * @returns {Promise<Object>}
    */
-  static async authenticateUser(email, password) {
+  static async authenticateUser(email, password, rememberMe = false) {
     // findByEmail returns the raw record (including the hash), so one read suffices.
     const rawUser = await UserModel.findByEmail(email);
     if (!rawUser) {
@@ -72,13 +86,12 @@ class UserService {
       throw new AppError('Invalid email or password.', 401);
     }
 
-    const { password: _pw, ...userWithoutPassword } = rawUser;
-    const token = this.signToken(rawUser.id);
-    return { user: userWithoutPassword, token };
+    const token = this.signToken(rawUser.id, rememberMe);
+    return { user: sanitize(rawUser), token };
   }
 
   /**
-   * Returns the user's profile (no password hash).
+   * Returns the user's profile (no password hash or reset token).
    * @param {string} userId
    * @returns {Promise<Object>}
    */
@@ -87,8 +100,44 @@ class UserService {
     if (!rawUser) {
       throw new AppError('User not found.', 404);
     }
-    const { password: _pw, ...userWithoutPassword } = rawUser;
-    return userWithoutPassword;
+    return sanitize(rawUser);
+  }
+
+  /**
+   * Begins a password reset: generates a one-time token, stores its hash with
+   * an expiry, and returns the raw token to the caller (to email or, for a
+   * self-hosted setup, log). Returns null when no account matches — the caller
+   * still responds with a generic 200 so email addresses can't be enumerated.
+   * @param {string} email
+   * @returns {Promise<{user: Object, token: string}|null>}
+   */
+  static async requestPasswordReset(email) {
+    const rawUser = await UserModel.findByEmail(email);
+    if (!rawUser) return null;
+
+    const token = crypto.randomBytes(32).toString('hex');
+    const expiresIso = new Date(Date.now() + config.resetTokenTtlMs).toISOString();
+    await UserModel.setResetToken(rawUser.id, hashToken(token), expiresIso);
+    return { user: sanitize(rawUser), token };
+  }
+
+  /**
+   * Completes a password reset given a valid, unexpired token.
+   * @param {string} token
+   * @param {string} newPassword
+   * @returns {Promise<boolean>}
+   */
+  static async resetPassword(token, newPassword) {
+    const rawUser = await UserModel.findByResetTokenHash(hashToken(token), new Date().toISOString());
+    if (!rawUser) {
+      throw new AppError('Invalid or expired reset token.', 400);
+    }
+
+    const salt = await bcrypt.genSalt(10);
+    const hashedPassword = await bcrypt.hash(newPassword, salt);
+    await UserModel.updatePassword(rawUser.id, hashedPassword);
+    await UserModel.clearResetToken(rawUser.id);
+    return true;
   }
 
   /**

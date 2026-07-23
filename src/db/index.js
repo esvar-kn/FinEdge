@@ -86,5 +86,9 @@ const userColumns = db.prepare("PRAGMA table_info('users')").all().map(c => c.na
 if (!userColumns.includes('currency')) {
   db.exec("ALTER TABLE users ADD COLUMN currency TEXT NOT NULL DEFAULT 'USD'");
 }
+if (!userColumns.includes('resetTokenHash')) {
+  db.exec('ALTER TABLE users ADD COLUMN resetTokenHash TEXT');
+  db.exec('ALTER TABLE users ADD COLUMN resetTokenExpires TEXT');
+}
 
 export default db;

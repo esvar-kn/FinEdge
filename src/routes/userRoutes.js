@@ -6,6 +6,8 @@ import {
   validateLogin,
   validatePasswordChange,
   validateAccountDelete,
+  validateForgotPassword,
+  validateResetPassword,
   requireAuth
 } from '../middleware/validator.js';
 
@@ -13,6 +15,8 @@ const router = Router();
 
 router.post('/register', authLimiter, validateRegister, UserController.register);
 router.post('/login', authLimiter, validateLogin, UserController.login);
+router.post('/forgot-password', authLimiter, validateForgotPassword, UserController.forgotPassword);
+router.post('/reset-password', authLimiter, validateResetPassword, UserController.resetPassword);
 
 // Account management (authenticated)
 router.get('/me', requireAuth, UserController.getProfile);
