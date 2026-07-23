@@ -122,12 +122,12 @@ async function apiRequest(path, options = {}) {
 }
 
 // Auth handlers
-async function login(email, password) {
+async function login(email, password, rememberMe = false) {
   showLoader();
   try {
     const res = await apiRequest('/api/users/login', {
       method: 'POST',
-      body: { email, password }
+      body: { email, password, rememberMe }
     });
     
     if (res && res.status === 'success') {
@@ -302,11 +302,46 @@ const VIEWS = {
                 </div>
               </div>
             </div>
-            
+
+            <div class="flex items-center justify-between">
+              <label class="flex items-center gap-2 text-[11px] text-on-surface-variant cursor-pointer select-none">
+                <input type="checkbox" id="remember-me" class="accent-primary w-3.5 h-3.5 cursor-pointer"/>
+                Remember me for 30 days
+              </label>
+              <a id="forgot-link" href="#" class="text-[11px] text-primary hover:underline font-bold uppercase tracking-wider">Forgot?</a>
+            </div>
+
             <button class="w-full bg-primary py-4 text-on-primary font-bold text-xs uppercase tracking-[0.2em] hover:brightness-110 active:scale-[0.98] transition-all flex items-center justify-center space-x-2 shadow-lg shadow-primary/20 cursor-pointer" type="submit">
               <span>Log In</span>
               <span class="material-symbols-outlined text-sm">arrow_forward</span>
             </button>
+          </form>
+
+          <!-- Forgot / Reset Password Form -->
+          <form id="forgot-form" class="space-y-6 hidden">
+            <h2 class="text-xl font-bold tracking-tight text-on-surface uppercase mb-2">Reset Passcode</h2>
+            <p class="text-[11px] text-on-surface-variant leading-relaxed">
+              Enter your email to generate a reset code. In this self-hosted setup the code is shown in the server console — your administrator will share it with you. Then enter the code and a new passcode below.
+            </p>
+            <div class="space-y-2">
+              <label class="block font-label-md text-xs text-on-surface-variant uppercase tracking-widest" for="forgot-email">Email</label>
+              <div class="flex gap-2">
+                <input class="flex-1 bg-surface-container-highest border border-outline-variant px-4 py-3 text-on-surface focus:outline-none focus:border-primary transition-colors placeholder:text-surface-variant" id="forgot-email" placeholder="executive@finedge.com" type="email"/>
+                <button type="button" id="request-reset-btn" class="px-4 bg-surface-container-highest border border-primary/50 text-primary font-bold text-[10px] uppercase tracking-wider hover:bg-primary/10 active:scale-95 transition-all cursor-pointer">Send Code</button>
+              </div>
+            </div>
+            <div class="space-y-2">
+              <label class="block font-label-md text-xs text-on-surface-variant uppercase tracking-widest" for="reset-token">Reset Code</label>
+              <input class="w-full bg-surface-container-highest border border-outline-variant px-4 py-3 text-on-surface focus:outline-none focus:border-primary transition-colors placeholder:text-surface-variant" id="reset-token" placeholder="Paste the reset code" type="text"/>
+            </div>
+            <div class="space-y-2">
+              <label class="block font-label-md text-xs text-on-surface-variant uppercase tracking-widest" for="reset-new-password">New Passcode</label>
+              <input class="w-full bg-surface-container-highest border border-outline-variant px-4 py-3 text-on-surface focus:outline-none focus:border-primary transition-colors placeholder:text-surface-variant" id="reset-new-password" placeholder="Min. 6 characters" type="password"/>
+            </div>
+            <button type="submit" class="w-full bg-primary py-4 text-on-primary font-bold text-xs uppercase tracking-[0.2em] hover:brightness-110 active:scale-[0.98] transition-all shadow-lg shadow-primary/20 cursor-pointer">
+              Reset Passcode
+            </button>
+            <a id="back-to-login" href="#" class="block text-center text-[11px] text-on-surface-variant hover:text-primary uppercase tracking-wider">← Back to sign in</a>
           </form>
 
           <!-- Register Form -->
@@ -399,7 +434,11 @@ const VIEWS = {
 
     loginForm.addEventListener('submit', (e) => {
       e.preventDefault();
-      login(document.getElementById('email').value, document.getElementById('password').value);
+      login(
+        document.getElementById('email').value,
+        document.getElementById('password').value,
+        document.getElementById('remember-me').checked
+      );
     });
 
     registerForm.addEventListener('submit', (e) => {
@@ -409,6 +448,62 @@ const VIEWS = {
         document.getElementById('reg-email').value,
         document.getElementById('reg-password').value
       );
+    });
+
+    // Forgot / reset password flow
+    const forgotForm = document.getElementById('forgot-form');
+    const authFooter = document.getElementById('auth-footer-text').parentElement;
+
+    document.getElementById('forgot-link').addEventListener('click', (e) => {
+      e.preventDefault();
+      loginForm.classList.add('hidden');
+      registerForm.classList.add('hidden');
+      forgotForm.classList.remove('hidden');
+      authFooter.classList.add('hidden');
+    });
+
+    document.getElementById('back-to-login').addEventListener('click', (e) => {
+      e.preventDefault();
+      forgotForm.classList.add('hidden');
+      loginForm.classList.remove('hidden');
+      authFooter.classList.remove('hidden');
+    });
+
+    document.getElementById('request-reset-btn').addEventListener('click', async () => {
+      const email = document.getElementById('forgot-email').value;
+      if (!email) { showToast('Enter your email first.', 'error'); return; }
+      showLoader();
+      try {
+        const res = await apiRequest('/api/users/forgot-password', { method: 'POST', body: { email } });
+        if (res && res.status === 'success') {
+          showToast('If that email is registered, a reset code has been generated.', 'success');
+        }
+      } catch (err) {
+        showToast(err.message, 'error');
+      } finally {
+        hideLoader();
+      }
+    });
+
+    forgotForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const token = document.getElementById('reset-token').value.trim();
+      const newPassword = document.getElementById('reset-new-password').value;
+      showLoader();
+      try {
+        const res = await apiRequest('/api/users/reset-password', { method: 'POST', body: { token, newPassword } });
+        if (res && res.status === 'success') {
+          showToast('Passcode reset. Please sign in.', 'success');
+          forgotForm.classList.add('hidden');
+          loginForm.classList.remove('hidden');
+          authFooter.classList.remove('hidden');
+          forgotForm.reset();
+        }
+      } catch (err) {
+        showToast(err.message, 'error');
+      } finally {
+        hideLoader();
+      }
     });
   },
 
@@ -510,7 +605,7 @@ const VIEWS = {
           <div class="col-span-12 lg:col-span-4 bento-card p-8 flex flex-col justify-between">
             <div>
               <h3 class="text-sm font-bold uppercase tracking-widest text-primary mb-6 flex items-center gap-2">
-                <span class="material-symbols-outlined text-[18px]">sparkles</span> Portfolio Advisory
+                <span class="material-symbols-outlined text-[18px]">auto_awesome</span> Portfolio Advisory
               </h3>
               <div class="space-y-4" id="insights-list-container">
                 <div class="text-center text-on-surface-variant py-10">
@@ -2036,9 +2131,13 @@ document.addEventListener('DOMContentLoaded', () => {
   window.addEventListener('hashchange', router);
   router();
 
-  // Register the service worker so the app is installable (PWA). The worker is
-  // network-only, so it never serves stale financial data.
+  // The app is installable via the web manifest alone (Add to Home Screen) —
+  // no service worker is used, since intercepting requests risks stale data and
+  // breaks cross-origin CDN loads. Self-heal: unregister any service worker an
+  // earlier build may have registered, so returning users get a clean page.
   if ('serviceWorker' in navigator) {
-    navigator.serviceWorker.register('/sw.js').catch(() => {/* non-fatal */});
+    navigator.serviceWorker.getRegistrations()
+      .then(regs => regs.forEach(r => r.unregister()))
+      .catch(() => {/* non-fatal */});
   }
 });
