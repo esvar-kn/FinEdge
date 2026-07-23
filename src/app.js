@@ -23,7 +23,25 @@ const PORT = process.env.PORT || 3000;
 
 // Security headers (helmet) and optional CORS. Without CORS_ORIGIN set, no
 // CORS headers are sent — browsers stay same-origin, the safest default.
-app.use(helmet());
+// The CSP is widened from helmet's default to permit the CDNs the bundled
+// frontend loads (Tailwind Play CDN, Chart.js, Google Fonts). Tailwind's Play
+// CDN requires 'unsafe-eval'/'unsafe-inline'; acceptable for a self-hosted
+// personal/family app. To tighten it later, self-host these assets and drop
+// the extra sources back to 'self'.
+app.use(
+  helmet({
+    contentSecurityPolicy: {
+      directives: {
+        ...helmet.contentSecurityPolicy.getDefaultDirectives(),
+        'script-src': ["'self'", "'unsafe-inline'", "'unsafe-eval'", 'https://cdn.tailwindcss.com', 'https://cdn.jsdelivr.net'],
+        'style-src': ["'self'", "'unsafe-inline'", 'https://fonts.googleapis.com'],
+        'font-src': ["'self'", 'data:', 'https://fonts.gstatic.com'],
+        'connect-src': ["'self'"],
+        'img-src': ["'self'", 'data:']
+      }
+    }
+  })
+);
 if (config.corsOrigin) {
   app.use(cors({ origin: config.corsOrigin }));
 }
