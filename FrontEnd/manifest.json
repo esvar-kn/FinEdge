@@ -1,0 +1,24 @@
+{
+  "name": "FinEdge — Personal Finance",
+  "short_name": "FinEdge",
+  "description": "Track income, expenses, budgets, recurring bills, and savings goals.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#121414",
+  "theme_color": "#121414",
+  "icons": [
+    {
+      "src": "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 192 192'%3E%3Crect width='192' height='192' rx='36' fill='%23121414'/%3E%3Ctext x='96' y='130' font-size='110' font-family='Georgia,serif' font-weight='bold' text-anchor='middle' fill='%23ffd165'%3EF%3C/text%3E%3C/svg%3E",
+      "sizes": "192x192",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'%3E%3Crect width='512' height='512' rx='96' fill='%23121414'/%3E%3Ctext x='256' y='350' font-size='300' font-family='Georgia,serif' font-weight='bold' text-anchor='middle' fill='%23ffd165'%3EF%3C/text%3E%3C/svg%3E",
+      "sizes": "512x512",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

@@ -467,6 +467,33 @@ const VIEWS = {
           </div>
         </section>
 
+        <!-- Forecast + Upcoming Bills -->
+        <section class="grid grid-cols-12 gap-gutter">
+          <div class="col-span-12 lg:col-span-7 bento-card p-8">
+            <h3 class="text-sm font-bold uppercase tracking-widest text-primary mb-6 flex items-center gap-2">
+              <span class="material-symbols-outlined text-[18px]">query_stats</span> Month-End Forecast
+            </h3>
+            <div class="grid grid-cols-3 gap-4" id="forecast-grid">
+              <div class="text-center text-on-surface-variant col-span-3 py-6">
+                <div class="w-5 h-5 border-2 border-primary border-t-transparent rounded-full animate-spin mx-auto mb-2"></div>
+                <span class="text-xs">Projecting…</span>
+              </div>
+            </div>
+            <p class="mt-5 text-[10px] text-on-surface-variant uppercase tracking-wider opacity-70">Projected = recorded so far this month + recurring rules still scheduled before month end.</p>
+          </div>
+          <div class="col-span-12 lg:col-span-5 bento-card p-8">
+            <h3 class="text-sm font-bold uppercase tracking-widest text-primary mb-6 flex items-center gap-2">
+              <span class="material-symbols-outlined text-[18px]">notifications_active</span> Upcoming Bills
+            </h3>
+            <div class="space-y-3" id="upcoming-bills-list">
+              <div class="text-center text-on-surface-variant py-6">
+                <div class="w-5 h-5 border-2 border-primary border-t-transparent rounded-full animate-spin mx-auto mb-2"></div>
+                <span class="text-xs">Checking schedule…</span>
+              </div>
+            </div>
+          </div>
+        </section>
+
         <!-- Dynamic Visuals -->
         <section class="grid grid-cols-12 gap-gutter">
           <!-- Monthly chart canvas -->
@@ -511,6 +538,7 @@ const VIEWS = {
     });
 
     await updateDashboardData();
+    fetchDashboardExtras();
   },
 
   transactions: async () => {
@@ -765,6 +793,63 @@ const VIEWS = {
     fetchBudgets();
   },
 
+  goals: async () => {
+    document.getElementById('app-root').innerHTML = `
+      <div class="flex-1 p-margin-desktop space-y-8 max-w-[1400px] mx-auto w-full fade-in">
+        <section class="flex flex-col md:flex-row md:items-end justify-between gap-6">
+          <div>
+            <h3 class="font-headline-lg text-3xl font-black text-on-surface tracking-tight uppercase">Savings Goals</h3>
+            <p class="font-body-md text-sm text-on-surface-variant mt-2 max-w-2xl opacity-85">
+              Set targets and track progress toward the things you're saving for.
+            </p>
+          </div>
+        </section>
+
+        <!-- New goal form -->
+        <div class="bg-surface-container border border-surface-variant p-6 rounded relative">
+          <div class="absolute top-0 left-0 right-0 h-[1px] bg-primary"></div>
+          <form id="goal-form" class="grid grid-cols-1 sm:grid-cols-4 gap-4 items-end">
+            <div class="space-y-1.5 sm:col-span-2">
+              <label class="block text-[10px] font-bold text-on-surface-variant uppercase tracking-widest">Goal Name</label>
+              <input type="text" id="goal-name" required placeholder="e.g. Emergency Fund" class="w-full bg-surface-container-highest border border-outline-variant px-4 py-2.5 text-xs text-on-surface rounded focus:outline-none focus:border-primary"/>
+            </div>
+            <div class="space-y-1.5">
+              <label class="block text-[10px] font-bold text-on-surface-variant uppercase tracking-widest">Target Amount</label>
+              <input type="number" id="goal-target" required min="0.01" step="0.01" placeholder="0.00" class="w-full bg-surface-container-highest border border-outline-variant px-4 py-2.5 text-xs text-on-surface rounded focus:outline-none focus:border-primary"/>
+            </div>
+            <div class="space-y-1.5">
+              <label class="block text-[10px] font-bold text-on-surface-variant uppercase tracking-widest">Deadline (optional)</label>
+              <input type="date" id="goal-deadline" class="w-full bg-surface-container-highest border border-outline-variant px-4 py-2.5 text-xs text-on-surface rounded focus:outline-none focus:border-primary"/>
+            </div>
+            <div class="sm:col-span-4">
+              <button type="submit" class="px-6 py-2.5 bg-primary text-on-primary font-bold rounded text-xs uppercase tracking-wider hover:opacity-90 active:scale-95 transition-all cursor-pointer flex items-center gap-2">
+                <span class="material-symbols-outlined text-sm">add</span> Create Goal
+              </button>
+            </div>
+          </form>
+        </div>
+
+        <section class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-gutter" id="goals-container">
+          <div class="col-span-full text-center text-on-surface-variant py-10">
+            <div class="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin mx-auto mb-3"></div>
+            <span>Fetching goals...</span>
+          </div>
+        </section>
+      </div>
+    `;
+
+    document.getElementById('goal-form').addEventListener('submit', (e) => {
+      e.preventDefault();
+      saveGoal({
+        name: document.getElementById('goal-name').value,
+        target: document.getElementById('goal-target').value,
+        deadline: document.getElementById('goal-deadline').value || undefined
+      });
+    });
+
+    fetchGoals();
+  },
+
   recurring: async () => {
     document.getElementById('app-root').innerHTML = `
       <div class="flex-1 p-margin-desktop space-y-8 max-w-[1400px] mx-auto w-full fade-in">
@@ -824,6 +909,26 @@ const VIEWS = {
           Manage secure credentials and configurations for your profile.
         </p>
 
+        <!-- Display Currency -->
+        <div class="bg-surface-container border border-surface-variant p-8 rounded relative">
+          <div class="absolute top-0 left-0 right-0 h-[1px] bg-primary"></div>
+          <h4 class="text-sm font-bold uppercase tracking-widest text-primary mb-6 flex items-center gap-2">
+            <span class="material-symbols-outlined text-[18px]">payments</span> Display Currency
+          </h4>
+          <p class="text-xs text-on-surface-variant leading-relaxed mb-4">
+            Sets the currency symbol and formatting shown across the dashboard, transactions, budgets, and goals. Amounts are not converted.
+          </p>
+          <div class="flex items-end gap-3">
+            <div class="space-y-1.5 flex-1 max-w-[260px]">
+              <label for="currency-select" class="block text-[10px] font-bold text-on-surface-variant uppercase tracking-widest">Currency</label>
+              <select id="currency-select" class="w-full bg-surface-container-highest border border-outline-variant px-4 py-2.5 text-xs text-on-surface rounded focus:outline-none focus:border-primary cursor-pointer">
+                <option>Loading…</option>
+              </select>
+            </div>
+            <button id="save-currency-btn" class="px-5 py-2.5 bg-primary text-on-primary font-bold text-xs uppercase tracking-wider shadow-lg shadow-primary/20 hover:brightness-110 active:scale-95 transition-all cursor-pointer">Save</button>
+          </div>
+        </div>
+
         <!-- Update Passcode -->
         <div class="bg-surface-container border border-surface-variant p-8 rounded relative">
           <div class="absolute top-0 left-0 right-0 h-[1px] bg-primary"></div>
@@ -855,6 +960,42 @@ const VIEWS = {
         </div>
       </div>
     `;
+
+    // Populate and wire the currency selector
+    (async () => {
+      try {
+        const res = await apiRequest('/api/users/settings');
+        const select = document.getElementById('currency-select');
+        if (res && res.data && select) {
+          select.innerHTML = res.data.supportedCurrencies
+            .map(c => `<option value="${c.code}" ${c.code === res.data.currency ? 'selected' : ''}>${c.code} — ${escapeHTML(c.name)} (${escapeHTML(c.symbol)})</option>`)
+            .join('');
+        }
+      } catch (err) {
+        showToast(err.message, 'error');
+      }
+    })();
+
+    document.getElementById('save-currency-btn').addEventListener('click', async () => {
+      const currency = document.getElementById('currency-select').value;
+      showLoader();
+      try {
+        const res = await apiRequest('/api/users/settings', {
+          method: 'PUT',
+          body: { currency }
+        });
+        if (res && res.status === 'success') {
+          // Reflect immediately everywhere: update state + persisted user, re-render
+          STATE.user = res.data.user;
+          localStorage.setItem('finedge_user', JSON.stringify(STATE.user));
+          showToast(`Currency set to ${currency}.`, 'success');
+        }
+      } catch (err) {
+        showToast(err.message, 'error');
+      } finally {
+        hideLoader();
+      }
+    });
 
     document.getElementById('change-password-form').addEventListener('submit', async (e) => {
       e.preventDefault();
@@ -1452,6 +1593,176 @@ window.deleteBudget = async function(category) {
   }
 };
 
+// Dashboard forecast + upcoming bills
+async function fetchDashboardExtras() {
+  const grid = document.getElementById('forecast-grid');
+  const bills = document.getElementById('upcoming-bills-list');
+
+  try {
+    const res = await apiRequest('/api/transactions/forecast');
+    if (grid && res && res.status === 'success') {
+      const f = res.data.forecast;
+      const netColor = f.projected.net >= 0 ? 'text-primary' : 'text-error';
+      grid.innerHTML = `
+        <div>
+          <span class="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">Proj. Income</span>
+          <div class="text-xl font-black text-on-surface mt-1">${formatCurrency(f.projected.income)}</div>
+          <div class="text-[10px] text-on-surface-variant mt-1">now ${formatCurrency(f.actual.income)}</div>
+        </div>
+        <div>
+          <span class="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">Proj. Expenses</span>
+          <div class="text-xl font-black text-on-surface mt-1">${formatCurrency(f.projected.expenses)}</div>
+          <div class="text-[10px] text-on-surface-variant mt-1">now ${formatCurrency(f.actual.expenses)}</div>
+        </div>
+        <div>
+          <span class="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">Proj. Net</span>
+          <div class="text-xl font-black ${netColor} mt-1">${formatCurrency(f.projected.net)}</div>
+          <div class="text-[10px] text-on-surface-variant mt-1">now ${formatCurrency(f.actual.net)}</div>
+        </div>`;
+    }
+  } catch {
+    if (grid) grid.innerHTML = '<p class="col-span-3 text-xs text-on-surface-variant">Forecast unavailable.</p>';
+  }
+
+  try {
+    const res = await apiRequest('/api/recurring/upcoming?days=30');
+    if (bills && res && res.status === 'success') {
+      const list = res.data.upcoming;
+      if (list.length === 0) {
+        bills.innerHTML = '<p class="text-xs text-on-surface-variant py-4">No bills due in the next 30 days.</p>';
+      } else {
+        bills.innerHTML = list.slice(0, 6).map(b => {
+          const due = b.daysUntil === 0 ? 'Due today' : `in ${b.daysUntil}d`;
+          const sign = b.type === 'income' ? '+' : '-';
+          const amtColor = b.type === 'income' ? 'text-primary' : 'text-on-surface';
+          return `
+            <div class="flex items-center justify-between border-b border-surface-variant/40 pb-2">
+              <div>
+                <div class="text-xs font-bold text-on-surface">${escapeHTML(b.category)}</div>
+                <div class="text-[10px] text-on-surface-variant uppercase tracking-wider">${escapeHTML(b.frequency)} · ${due}</div>
+              </div>
+              <span class="text-xs font-black ${amtColor}">${sign}${formatCurrency(b.amount)}</span>
+            </div>`;
+        }).join('');
+      }
+    }
+  } catch {
+    if (bills) bills.innerHTML = '<p class="text-xs text-on-surface-variant py-4">Reminders unavailable.</p>';
+  }
+}
+
+// Savings goals
+async function fetchGoals() {
+  const container = document.getElementById('goals-container');
+  if (!container) return;
+  try {
+    const res = await apiRequest('/api/goals');
+    if (!res || res.status !== 'success') return;
+    const goals = res.data.goals;
+
+    if (goals.length === 0) {
+      container.innerHTML = `
+        <div class="col-span-full text-center text-on-surface-variant py-12 border border-dashed border-surface-variant rounded">
+          <span class="material-symbols-outlined text-4xl opacity-40">savings</span>
+          <p class="mt-3 text-sm">No savings goals yet. Create one above to start tracking.</p>
+        </div>`;
+      return;
+    }
+
+    container.innerHTML = goals.map(g => {
+      const pct = Math.min(g.percentSaved, 100);
+      const barColor = g.complete ? 'bg-success' : 'bg-primary';
+      const deadline = g.deadline ? new Date(g.deadline).toLocaleDateString() : '—';
+      return `
+        <div class="bg-surface-container border border-surface-variant p-6 rounded flex flex-col justify-between">
+          <div>
+            <div class="flex items-start justify-between gap-2">
+              <h4 class="text-base font-black text-on-surface">${escapeHTML(g.name)}</h4>
+              ${g.complete ? '<span class="text-[10px] font-bold uppercase tracking-wider text-success">Reached</span>' : ''}
+            </div>
+            <div class="flex items-baseline gap-2 mt-3">
+              <span class="text-2xl font-black text-on-surface">${formatCurrency(g.saved)}</span>
+              <span class="text-xs text-on-surface-variant">of ${formatCurrency(g.target)}</span>
+            </div>
+            <div class="w-full h-2 bg-surface-container-low border border-surface-variant rounded-full mt-4 overflow-hidden">
+              <div class="h-full ${barColor} transition-all duration-500" style="width: ${pct}%;"></div>
+            </div>
+            <div class="flex justify-between mt-3 text-[10px] font-bold uppercase tracking-wider text-on-surface-variant">
+              <span>${g.percentSaved}% saved</span>
+              <span>${formatCurrency(g.remaining)} to go</span>
+            </div>
+            <p class="mt-3 text-[10px] uppercase tracking-wider text-on-surface-variant opacity-70">Deadline: ${deadline}</p>
+          </div>
+          <div class="flex gap-2 mt-5">
+            <button onclick="contributeGoal('${g.id}')" class="flex-1 px-3 py-2 bg-primary text-on-primary font-bold text-[10px] uppercase tracking-wider rounded hover:opacity-90 active:scale-95 transition-all cursor-pointer">Add Funds</button>
+            <button onclick="deleteGoal('${g.id}', '${escapeHTML(g.name).replace(/'/g, "\\'")}')" class="px-3 py-2 border border-error/40 text-error font-bold text-[10px] uppercase tracking-wider rounded hover:bg-error/10 active:scale-95 transition-all cursor-pointer">Delete</button>
+          </div>
+        </div>`;
+    }).join('');
+  } catch (err) {
+    showToast(err.message, 'error');
+  }
+}
+
+async function saveGoal(data) {
+  showLoader();
+  try {
+    const res = await apiRequest('/api/goals', {
+      method: 'POST',
+      body: {
+        name: data.name,
+        target: parseFloat(data.target),
+        deadline: data.deadline
+      }
+    });
+    if (res && res.status === 'success') {
+      showToast('Savings goal created.', 'success');
+      document.getElementById('goal-form').reset();
+      fetchGoals();
+    }
+  } catch (err) {
+    showToast(err.message, 'error');
+  } finally {
+    hideLoader();
+  }
+}
+
+window.contributeGoal = async function(id) {
+  const input = prompt('Amount to add to this goal (use a negative number to withdraw):');
+  if (input === null) return;
+  const amount = parseFloat(input);
+  if (isNaN(amount) || amount === 0) {
+    showToast('Enter a non-zero number.', 'error');
+    return;
+  }
+  showLoader();
+  try {
+    const res = await apiRequest(`/api/goals/${id}/contribute`, { method: 'POST', body: { amount } });
+    if (res && res.status === 'success') {
+      showToast('Goal updated.', 'success');
+      fetchGoals();
+    }
+  } catch (err) {
+    showToast(err.message, 'error');
+  } finally {
+    hideLoader();
+  }
+};
+
+window.deleteGoal = async function(id, name) {
+  if (!confirm(`Delete the goal "${name}"?`)) return;
+  showLoader();
+  try {
+    await apiRequest(`/api/goals/${id}`, { method: 'DELETE' });
+    showToast('Goal deleted.', 'success');
+    fetchGoals();
+  } catch (err) {
+    showToast(err.message, 'error');
+  } finally {
+    hideLoader();
+  }
+};
+
 // Recurring automations
 async function fetchRecurringRules() {
   const tbody = document.getElementById('recurring-table-body');
@@ -1540,11 +1851,22 @@ window.deleteRecurringRule = async function(id) {
 };
 
 // Utilities
+// Maps currency codes to a reasonable locale so grouping/decimals look natural
+// (Intl derives the correct symbol from the currency code regardless).
+const CURRENCY_LOCALES = {
+  USD: 'en-US', EUR: 'de-DE', GBP: 'en-GB', INR: 'en-IN', JPY: 'ja-JP',
+  CAD: 'en-CA', AUD: 'en-AU', SGD: 'en-SG', AED: 'ar-AE', CHF: 'de-CH'
+};
+
 function formatCurrency(amount) {
-  return new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currency: 'USD'
-  }).format(amount);
+  const code = (STATE.user && STATE.user.currency) || 'USD';
+  const locale = CURRENCY_LOCALES[code] || 'en-US';
+  try {
+    return new Intl.NumberFormat(locale, { style: 'currency', currency: code }).format(amount);
+  } catch {
+    // Unknown code (shouldn't happen — server validates) -> plain USD fallback
+    return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(amount);
+  }
 }
 
 function escapeHTML(str) {
@@ -1713,4 +2035,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
   window.addEventListener('hashchange', router);
   router();
+
+  // Register the service worker so the app is installable (PWA). The worker is
+  // network-only, so it never serves stale financial data.
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('/sw.js').catch(() => {/* non-fatal */});
+  }
 });
