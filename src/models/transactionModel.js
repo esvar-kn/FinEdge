@@ -17,21 +17,75 @@ const SORT_COLUMNS = {
 
 function mapRow(row) {
   if (!row) return null;
-  const { amountCents, updatedAt, recurringRuleId, accountId, ...rest } = row;
+  const { amountCents, updatedAt, recurringRuleId, accountId, receipt, ...rest } = row;
   return {
     ...rest,
     amount: toAmount(amountCents),
     ...(updatedAt ? { updatedAt } : {}),
     ...(recurringRuleId ? { recurringRuleId } : {}),
-    ...(accountId ? { accountId } : {})
+    ...(accountId ? { accountId } : {}),
+    ...(receipt ? { receipt } : {})
   };
+}
+
+/**
+ * Attaches `tags` (string[]) and `splits` ([{category, amount}]) to already-
+ * mapped rows, batched by id. Only non-empty arrays are attached, so a plain
+ * transaction keeps its original shape.
+ */
+function attachTagsSplits(rows) {
+  if (rows.length === 0) return rows;
+  const ids = rows.map(r => r.id);
+  const placeholders = ids.map(() => '?').join(',');
+
+  const tagRows = db
+    .prepare(`SELECT transactionId, tag FROM transaction_tags WHERE transactionId IN (${placeholders}) ORDER BY tag`)
+    .all(...ids);
+  const splitRows = db
+    .prepare(`SELECT transactionId, category, amountCents FROM transaction_splits WHERE transactionId IN (${placeholders})`)
+    .all(...ids);
+
+  const tagsBy = new Map();
+  for (const t of tagRows) {
+    if (!tagsBy.has(t.transactionId)) tagsBy.set(t.transactionId, []);
+    tagsBy.get(t.transactionId).push(t.tag);
+  }
+  const splitsBy = new Map();
+  for (const s of splitRows) {
+    if (!splitsBy.has(s.transactionId)) splitsBy.set(s.transactionId, []);
+    splitsBy.get(s.transactionId).push({ category: s.category, amount: toAmount(s.amountCents) });
+  }
+
+  for (const r of rows) {
+    const tags = tagsBy.get(r.id);
+    const splits = splitsBy.get(r.id);
+    if (tags && tags.length) r.tags = tags;
+    if (splits && splits.length) r.splits = splits;
+  }
+  return rows;
+}
+
+/** Writes a transaction's tags and splits inside the caller's db transaction. */
+function writeTagsSplits(transactionId, tags, splits) {
+  if (Array.isArray(tags)) {
+    for (const tag of tags) {
+      db.prepare('INSERT OR IGNORE INTO transaction_tags (transactionId, tag) VALUES (?, ?)')
+        .run(transactionId, String(tag).toLowerCase().trim());
+    }
+  }
+  if (Array.isArray(splits)) {
+    for (const s of splits) {
+      db.prepare('INSERT INTO transaction_splits (id, transactionId, category, amountCents) VALUES (?, ?, ?, ?)')
+        .run(uuidv4(), transactionId, s.category, toCents(s.amount));
+    }
+  }
 }
 
 /**
  * Builds the shared WHERE clause + params for user-scoped queries with
  * optional type / category / description-search filters.
  */
-function buildFilters(userId, { type, category, q, from, toExclusive, accountId } = {}) {
+function buildFilters(userId, { type, category, q, from, toExclusive, accountId, tag } = {}) {
   const clauses = ['userId = ?'];
   const params = [userId];
 
@@ -46,6 +100,10 @@ function buildFilters(userId, { type, category, q, from, toExclusive, accountId 
   if (accountId) {
     clauses.push('accountId = ?');
     params.push(accountId);
+  }
+  if (tag) {
+    clauses.push('EXISTS (SELECT 1 FROM transaction_tags tt WHERE tt.transactionId = transactions.id AND tt.tag = ?)');
+    params.push(String(tag).toLowerCase().trim());
   }
   if (q) {
     // Escape LIKE wildcards so a literal % or _ in the search term matches itself.
@@ -72,7 +130,8 @@ class TransactionModel {
    * @returns {Promise<Object|null>}
    */
   static async findById(id) {
-    return mapRow(db.prepare('SELECT * FROM transactions WHERE id = ?').get(id));
+    const row = mapRow(db.prepare('SELECT * FROM transactions WHERE id = ?').get(id));
+    return row ? attachTagsSplits([row])[0] : null;
   }
 
   /**
@@ -101,6 +160,7 @@ class TransactionModel {
     }
 
     const transactions = db.prepare(sql).all(...pageParams).map(mapRow);
+    attachTagsSplits(transactions);
     return { transactions, total };
   }
 
@@ -123,18 +183,10 @@ class TransactionModel {
       )
       .get(...params);
 
-    const categoryRows = db
-      .prepare(
-        `SELECT LOWER(TRIM(category)) AS category, SUM(amountCents) AS cents
-         FROM transactions
-         WHERE ${where} AND type = 'expense'
-         GROUP BY LOWER(TRIM(category))`
-      )
-      .all(...params);
-
+    const byCategory = TransactionModel.expenseCentsByCategorySync(userId, range);
     const categoryBreakdown = {};
-    for (const row of categoryRows) {
-      categoryBreakdown[row.category] = toAmount(row.cents);
+    for (const [category, cents] of byCategory) {
+      categoryBreakdown[category] = toAmount(cents);
     }
 
     return {
@@ -221,16 +273,10 @@ class TransactionModel {
       months.push({ month: `${year}-${mm}`, income: toAmount(inc), expenses: toAmount(exp) });
     }
 
-    const categoryRows = db
-      .prepare(
-        `SELECT LOWER(TRIM(category)) AS category, SUM(amountCents) AS cents
-         FROM transactions
-         WHERE userId = ? AND type = 'expense' AND date >= ? AND date < ?
-         GROUP BY LOWER(TRIM(category)) ORDER BY cents DESC`
-      )
-      .all(userId, from, toExclusive);
     const categoryBreakdown = {};
-    for (const r of categoryRows) categoryBreakdown[r.category] = toAmount(r.cents);
+    for (const [category, cents] of TransactionModel.expenseCentsByCategorySync(userId, { from, toExclusive })) {
+      categoryBreakdown[category] = toAmount(cents);
+    }
 
     return {
       year,
@@ -250,15 +296,65 @@ class TransactionModel {
    * @returns {Promise<Map<string, number>>} category -> cents spent
    */
   static async expenseCentsByCategory(userId, range) {
-    const { where, params } = buildFilters(userId, range);
+    return TransactionModel.expenseCentsByCategorySync(userId, range);
+  }
+
+  /**
+   * Split-aware expense-cents-by-category for a date range (synchronous).
+   * A transaction with splits contributes through its split rows; a transaction
+   * without splits contributes its own category/amount. Totals are unaffected —
+   * splits only re-slice how an expense is attributed across categories.
+   * @param {string} userId
+   * @param {Object} [range] {from, toExclusive} ISO strings
+   * @returns {Map<string, number>} lowercased category -> cents
+   */
+  static expenseCentsByCategorySync(userId, range = {}) {
+    const dateClauses = [];
+    const dateParams = [];
+    if (range.from) { dateClauses.push('t.date >= ?'); dateParams.push(range.from); }
+    if (range.toExclusive) { dateClauses.push('t.date < ?'); dateParams.push(range.toExclusive); }
+    const dateWhere = dateClauses.length ? ' AND ' + dateClauses.join(' AND ') : '';
+
     const rows = db
       .prepare(
-        `SELECT LOWER(TRIM(category)) AS category, SUM(amountCents) AS cents
-         FROM transactions WHERE ${where} AND type = 'expense'
-         GROUP BY LOWER(TRIM(category))`
+        `SELECT cat AS category, SUM(cents) AS cents FROM (
+           SELECT LOWER(TRIM(t.category)) AS cat, t.amountCents AS cents
+           FROM transactions t
+           WHERE t.userId = ? AND t.type = 'expense'${dateWhere}
+             AND NOT EXISTS (SELECT 1 FROM transaction_splits s WHERE s.transactionId = t.id)
+           UNION ALL
+           SELECT LOWER(TRIM(s.category)) AS cat, s.amountCents AS cents
+           FROM transaction_splits s JOIN transactions t ON t.id = s.transactionId
+           WHERE t.userId = ? AND t.type = 'expense'${dateWhere}
+         ) GROUP BY cat`
       )
-      .all(...params);
+      .all(userId, ...dateParams, userId, ...dateParams);
     return new Map(rows.map(r => [r.category, r.cents]));
+  }
+
+  /**
+   * Expense cents grouped by month and lowercased category over an ISO range —
+   * used to compute envelope-rollover carry-over across prior months.
+   * @param {string} userId
+   * @param {string} fromIso inclusive
+   * @param {string} toExclusiveIso exclusive
+   * @returns {Promise<Array<{month: string, category: string, cents: number}>>}
+   */
+  static async monthlyExpenseCentsByCategory(userId, fromIso, toExclusiveIso) {
+    return db
+      .prepare(
+        `SELECT month, cat AS category, SUM(cents) AS cents FROM (
+           SELECT SUBSTR(t.date, 1, 7) AS month, LOWER(TRIM(t.category)) AS cat, t.amountCents AS cents
+           FROM transactions t
+           WHERE t.userId = ? AND t.type = 'expense' AND t.date >= ? AND t.date < ?
+             AND NOT EXISTS (SELECT 1 FROM transaction_splits s WHERE s.transactionId = t.id)
+           UNION ALL
+           SELECT SUBSTR(t.date, 1, 7) AS month, LOWER(TRIM(s.category)) AS cat, s.amountCents AS cents
+           FROM transaction_splits s JOIN transactions t ON t.id = s.transactionId
+           WHERE t.userId = ? AND t.type = 'expense' AND t.date >= ? AND t.date < ?
+         ) GROUP BY month, cat`
+      )
+      .all(userId, fromIso, toExclusiveIso, userId, fromIso, toExclusiveIso);
   }
 
   /**
@@ -279,12 +375,16 @@ class TransactionModel {
       recurringRuleId: txData.recurringRuleId || null,
       accountId: txData.accountId || null
     };
-    db.prepare(
-      `INSERT INTO transactions (id, userId, type, category, amountCents, description, date, createdAt, recurringRuleId, accountId)
-       VALUES (@id, @userId, @type, @category, @amountCents, @description, @date, @createdAt, @recurringRuleId, @accountId)`
-    ).run(row);
+    // Insert the transaction and its tags/splits atomically.
+    db.transaction(() => {
+      db.prepare(
+        `INSERT INTO transactions (id, userId, type, category, amountCents, description, date, createdAt, recurringRuleId, accountId)
+         VALUES (@id, @userId, @type, @category, @amountCents, @description, @date, @createdAt, @recurringRuleId, @accountId)`
+      ).run(row);
+      writeTagsSplits(row.id, txData.tags, txData.splits);
+    })();
 
-    return mapRow({ ...row, updatedAt: null });
+    return this.findById(row.id);
   }
 
   /**
@@ -294,26 +394,53 @@ class TransactionModel {
    * @returns {Promise<Object|null>} The updated record, or null if not found.
    */
   static async update(id, updateData) {
-    const info = db
-      .prepare(
-        `UPDATE transactions
-         SET type = @type, category = @category, amountCents = @amountCents,
-             description = @description, date = @date, accountId = @accountId,
-             updatedAt = @updatedAt
-         WHERE id = @id`
-      )
-      .run({
-        id,
-        type: updateData.type,
-        category: updateData.category,
-        amountCents: toCents(updateData.amount),
-        description: updateData.description,
-        date: updateData.date,
-        accountId: updateData.accountId || null,
-        updatedAt: new Date().toISOString()
-      });
+    let changed = 0;
+    db.transaction(() => {
+      const info = db
+        .prepare(
+          `UPDATE transactions
+           SET type = @type, category = @category, amountCents = @amountCents,
+               description = @description, date = @date, accountId = @accountId,
+               updatedAt = @updatedAt
+           WHERE id = @id`
+        )
+        .run({
+          id,
+          type: updateData.type,
+          category: updateData.category,
+          amountCents: toCents(updateData.amount),
+          description: updateData.description,
+          date: updateData.date,
+          accountId: updateData.accountId || null,
+          updatedAt: new Date().toISOString()
+        });
+      changed = info.changes;
+      if (changed === 0) return;
 
-    if (info.changes === 0) return null;
+      // Replace tags/splits only when the caller supplied them (undefined = leave as-is).
+      if (updateData.tags !== undefined) {
+        db.prepare('DELETE FROM transaction_tags WHERE transactionId = ?').run(id);
+        writeTagsSplits(id, updateData.tags, undefined);
+      }
+      if (updateData.splits !== undefined) {
+        db.prepare('DELETE FROM transaction_splits WHERE transactionId = ?').run(id);
+        writeTagsSplits(id, undefined, updateData.splits);
+      }
+    })();
+
+    if (changed === 0) return null;
+    return this.findById(id);
+  }
+
+  /**
+   * Sets (or clears, with null) a transaction's receipt filename.
+   * @param {string} id
+   * @param {string|null} filename
+   * @returns {Promise<Object|null>}
+   */
+  static async setReceipt(id, filename) {
+    db.prepare('UPDATE transactions SET receipt = ?, updatedAt = ? WHERE id = ?')
+      .run(filename, new Date().toISOString(), id);
     return this.findById(id);
   }
 

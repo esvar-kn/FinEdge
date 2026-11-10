@@ -8,8 +8,56 @@ import { AppError } from '../middleware/errorHandler.js';
 import { generateInsights } from '../utils/insightHelper.js';
 import { normalizeDate, monthRange, currentMonth, advanceDate } from '../utils/dates.js';
 import { toCSV, parseCSV } from '../utils/csv.js';
+import fs from 'fs';
+import path from 'path';
+import config from '../config/index.js';
+
+// Supported receipt image types <-> file extension.
+const RECEIPT_TYPES = {
+  'image/png': 'png',
+  'image/jpeg': 'jpg',
+  'image/jpg': 'jpg',
+  'image/webp': 'webp',
+  'image/gif': 'gif'
+};
+const EXT_TO_TYPE = { png: 'image/png', jpg: 'image/jpeg', webp: 'image/webp', gif: 'image/gif' };
 
 const CSV_HEADERS = ['id', 'type', 'category', 'amount', 'description', 'date'];
+
+/** Cleans a tags array to lowercased, trimmed, de-duplicated non-empty strings. */
+function normalizeTags(tags) {
+  if (tags === undefined) return undefined;
+  if (!Array.isArray(tags)) {
+    throw new AppError('tags must be an array of strings.', 400);
+  }
+  return [...new Set(tags.map(t => String(t).toLowerCase().trim()).filter(Boolean))];
+}
+
+/**
+ * Validates and resolves split line items, requiring the split amounts to sum
+ * to the transaction amount (compared in integer cents). Returns splits with
+ * each category resolved to the user's canonical spelling.
+ */
+async function normalizeSplits(userId, splits, amount) {
+  if (splits === undefined) return undefined;
+  if (!Array.isArray(splits) || splits.length === 0) {
+    throw new AppError('splits must be a non-empty array of { category, amount }.', 400);
+  }
+  const resolved = [];
+  let sumCents = 0;
+  for (const s of splits) {
+    const amt = parseFloat(s && s.amount);
+    if (!s || !s.category || typeof s.category !== 'string' || isNaN(amt) || amt <= 0) {
+      throw new AppError('Each split needs a non-empty category and a positive amount.', 400);
+    }
+    sumCents += Math.round(amt * 100);
+    resolved.push({ category: await CategoryService.resolve(userId, s.category), amount: amt });
+  }
+  if (sumCents !== Math.round(parseFloat(amount) * 100)) {
+    throw new AppError('Split amounts must sum to the transaction amount.', 400);
+  }
+  return resolved;
+}
 
 class TransactionService {
   /**
@@ -149,7 +197,9 @@ class TransactionService {
       amount: data.amount,
       description: data.description,
       date: data.date ? normalizeDate(data.date) : undefined,
-      accountId: data.accountId || null
+      accountId: data.accountId || null,
+      tags: normalizeTags(data.tags),
+      splits: await normalizeSplits(userId, data.splits, data.amount)
     });
     return tx;
   }
@@ -281,14 +331,18 @@ class TransactionService {
       }
     }
 
+    const effectiveAmount = data.amount !== undefined ? data.amount : tx.amount;
+
     // Prepare update payload (prevent overwriting userId or id)
     const updatePayload = {
       type: data.type || tx.type,
       category: data.category ? await CategoryService.resolve(userId, data.category) : tx.category,
-      amount: data.amount !== undefined ? data.amount : tx.amount,
+      amount: effectiveAmount,
       description: data.description !== undefined ? data.description : tx.description,
       date: data.date ? normalizeDate(data.date) : tx.date,
-      accountId
+      accountId,
+      tags: normalizeTags(data.tags),
+      splits: await normalizeSplits(userId, data.splits, effectiveAmount)
     };
 
     const updatedTx = await TransactionModel.update(id, updatePayload);
@@ -296,14 +350,84 @@ class TransactionService {
   }
 
   /**
-   * Deletes a transaction after checking ownership.
+   * Deletes a transaction after checking ownership. Also removes any attached
+   * receipt file so uploads don't leak after the row is gone.
    * @param {string} id
    * @param {string} userId
    * @returns {Promise<boolean>}
    */
   static async removeTransaction(id, userId) {
-    await this.#getOwnedTransaction(id, userId);
+    const tx = await this.#getOwnedTransaction(id, userId);
+    if (tx.receipt) {
+      try { fs.unlinkSync(path.join(config.uploadDir, tx.receipt)); } catch { /* already gone */ }
+    }
     await TransactionModel.delete(id);
+    return true;
+  }
+
+  /**
+   * Stores a receipt image for a transaction (ownership-checked). Replaces any
+   * existing receipt. Returns the updated transaction.
+   * @param {string} id
+   * @param {string} userId
+   * @param {Buffer} buffer raw image bytes
+   * @param {string} contentType request Content-Type
+   * @returns {Promise<Object>}
+   */
+  static async uploadReceipt(id, userId, buffer, contentType) {
+    const tx = await this.#getOwnedTransaction(id, userId);
+
+    const ext = RECEIPT_TYPES[String(contentType).split(';')[0].trim().toLowerCase()];
+    if (!ext) {
+      throw new AppError('Receipt must be a PNG, JPEG, WebP, or GIF image (set Content-Type).', 400);
+    }
+    if (!Buffer.isBuffer(buffer) || buffer.length === 0) {
+      throw new AppError('Receipt image body is empty.', 400);
+    }
+
+    fs.mkdirSync(config.uploadDir, { recursive: true });
+    // Remove a prior receipt of a different extension so it doesn't orphan.
+    if (tx.receipt && tx.receipt !== `${id}.${ext}`) {
+      try { fs.unlinkSync(path.join(config.uploadDir, tx.receipt)); } catch { /* ignore */ }
+    }
+    const filename = `${id}.${ext}`;
+    fs.writeFileSync(path.join(config.uploadDir, filename), buffer);
+
+    return TransactionModel.setReceipt(id, filename);
+  }
+
+  /**
+   * Resolves the on-disk path and content type of a transaction's receipt
+   * (ownership-checked). Throws 404 if there is none or the file is missing.
+   * @param {string} id
+   * @param {string} userId
+   * @returns {Promise<{path: string, contentType: string, filename: string}>}
+   */
+  static async getReceiptInfo(id, userId) {
+    const tx = await this.#getOwnedTransaction(id, userId);
+    if (!tx.receipt) {
+      throw new AppError('This transaction has no receipt.', 404);
+    }
+    const filePath = path.join(config.uploadDir, tx.receipt);
+    if (!fs.existsSync(filePath)) {
+      throw new AppError('Receipt file is missing.', 404);
+    }
+    const ext = tx.receipt.split('.').pop();
+    return { path: filePath, contentType: EXT_TO_TYPE[ext] || 'application/octet-stream', filename: tx.receipt };
+  }
+
+  /**
+   * Removes a transaction's receipt (ownership-checked).
+   * @param {string} id
+   * @param {string} userId
+   * @returns {Promise<boolean>}
+   */
+  static async removeReceipt(id, userId) {
+    const tx = await this.#getOwnedTransaction(id, userId);
+    if (tx.receipt) {
+      try { fs.unlinkSync(path.join(config.uploadDir, tx.receipt)); } catch { /* ignore */ }
+      await TransactionModel.setReceipt(id, null);
+    }
     return true;
   }
 }

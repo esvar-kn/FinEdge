@@ -8,8 +8,8 @@ import { queryDateRange, isValidMonth } from '../utils/dates.js';
  * Throws AppError(400) on an invalid from/to value.
  */
 function parseListOptions(query) {
-  const { type, category, q, sort, order, from, to, accountId } = query;
-  const options = { type, category, q, sort, order, accountId };
+  const { type, category, q, sort, order, from, to, accountId, tag } = query;
+  const options = { type, category, q, sort, order, accountId, tag };
 
   if (from !== undefined || to !== undefined) {
     const range = queryDateRange(from, to);
@@ -211,6 +211,48 @@ class TransactionController {
         status: 'success',
         data: { transaction: tx }
       });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * Uploads (or replaces) a transaction's receipt image. The image bytes are
+   * the raw request body with an image/* Content-Type.
+   */
+  static async uploadReceipt(req, res, next) {
+    try {
+      const tx = await TransactionService.uploadReceipt(
+        req.params.id,
+        req.userId,
+        req.body,
+        req.headers['content-type']
+      );
+      res.status(201).json({ status: 'success', data: { transaction: tx } });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * Streams a transaction's receipt image back to the caller.
+   */
+  static async getReceipt(req, res, next) {
+    try {
+      const info = await TransactionService.getReceiptInfo(req.params.id, req.userId);
+      res.status(200).set('Content-Type', info.contentType).sendFile(info.path);
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
+   * Removes a transaction's receipt image.
+   */
+  static async deleteReceipt(req, res, next) {
+    try {
+      await TransactionService.removeReceipt(req.params.id, req.userId);
+      res.status(204).send();
     } catch (error) {
       next(error);
     }

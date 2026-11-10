@@ -25,4 +25,13 @@ router.post('/', validateTransaction, TransactionController.createTransaction);
 router.put('/:id', validateTransactionUpdate, TransactionController.updateTransaction);
 router.delete('/:id', TransactionController.deleteTransaction);
 
+// Receipt image: raw image bytes in the request body (image/* Content-Type).
+router.post(
+  '/:id/receipt',
+  express.raw({ type: ['image/png', 'image/jpeg', 'image/jpg', 'image/webp', 'image/gif'], limit: '5mb' }),
+  TransactionController.uploadReceipt
+);
+router.get('/:id/receipt', TransactionController.getReceipt);
+router.delete('/:id/receipt', TransactionController.deleteReceipt);
+
 export default router;
