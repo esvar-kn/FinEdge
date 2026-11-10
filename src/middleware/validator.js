@@ -298,6 +298,92 @@ export function validateContribution(req, res, next) {
   next();
 }
 
+const VALID_ACCOUNT_TYPES = ['checking', 'savings', 'credit', 'cash', 'other'];
+
+/**
+ * Validates account creation payloads.
+ */
+export function validateAccount(req, res, next) {
+  const { name, type, openingBalance } = req.body;
+  const errors = [];
+
+  if (!name || typeof name !== 'string' || name.trim().length === 0) {
+    errors.push('Name must be a non-empty string.');
+  }
+
+  if (!type || !VALID_ACCOUNT_TYPES.includes(type)) {
+    errors.push(`Type must be one of: ${VALID_ACCOUNT_TYPES.join(', ')}.`);
+  }
+
+  if (openingBalance !== undefined && isNaN(parseFloat(openingBalance))) {
+    errors.push('openingBalance must be a number.');
+  }
+
+  if (errors.length > 0) {
+    return next(new AppError(errors.join(' | '), 400));
+  }
+
+  next();
+}
+
+/**
+ * Validates account update payloads. All fields optional, but any provided
+ * field must be valid.
+ */
+export function validateAccountUpdate(req, res, next) {
+  const { name, type, openingBalance, archived } = req.body;
+  const errors = [];
+
+  if (name !== undefined && (typeof name !== 'string' || name.trim().length === 0)) {
+    errors.push('Name must be a non-empty string.');
+  }
+  if (type !== undefined && !VALID_ACCOUNT_TYPES.includes(type)) {
+    errors.push(`Type must be one of: ${VALID_ACCOUNT_TYPES.join(', ')}.`);
+  }
+  if (openingBalance !== undefined && isNaN(parseFloat(openingBalance))) {
+    errors.push('openingBalance must be a number.');
+  }
+  if (archived !== undefined && typeof archived !== 'boolean') {
+    errors.push('archived must be a boolean.');
+  }
+
+  if (errors.length > 0) {
+    return next(new AppError(errors.join(' | '), 400));
+  }
+
+  next();
+}
+
+/**
+ * Validates transfer creation payloads.
+ */
+export function validateTransfer(req, res, next) {
+  const { fromAccountId, toAccountId, amount, date } = req.body;
+  const errors = [];
+
+  if (!fromAccountId || typeof fromAccountId !== 'string') {
+    errors.push('fromAccountId is required.');
+  }
+  if (!toAccountId || typeof toAccountId !== 'string') {
+    errors.push('toAccountId is required.');
+  }
+
+  const parsedAmount = parseFloat(amount);
+  if (amount === undefined || isNaN(parsedAmount) || parsedAmount <= 0) {
+    errors.push('Amount must be a positive number greater than 0.');
+  }
+
+  if (date !== undefined && !normalizeDate(date)) {
+    errors.push('Date must be a valid YYYY-MM-DD or ISO-8601 date string.');
+  }
+
+  if (errors.length > 0) {
+    return next(new AppError(errors.join(' | '), 400));
+  }
+
+  next();
+}
+
 /**
  * Authentication middleware: verifies the Bearer JWT and attaches req.userId.
  */
