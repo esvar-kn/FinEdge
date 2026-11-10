@@ -29,7 +29,7 @@ class BudgetController {
    */
   static async setBudget(req, res, next) {
     try {
-      const budget = await BudgetService.setBudget(req.userId, req.params.category, req.body.limit);
+      const budget = await BudgetService.setBudget(req.userId, req.params.category, req.body.limit, req.body.rollover);
       res.status(200).json({
         status: 'success',
         data: { budget }

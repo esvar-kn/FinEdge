@@ -7,10 +7,11 @@ const toAmount = (cents) => cents / 100;
 
 function mapRow(row) {
   if (!row) return null;
-  const { monthlyLimitCents, updatedAt, ...rest } = row;
+  const { monthlyLimitCents, rollover, updatedAt, ...rest } = row;
   return {
     ...rest,
     monthlyLimit: toAmount(monthlyLimitCents),
+    rollover: !!rollover,
     ...(updatedAt ? { updatedAt } : {})
   };
 }
@@ -35,9 +36,19 @@ class BudgetModel {
    * @returns {Promise<Map<string, {category: string, limitCents: number}>>}
    */
   static async limitsByCategory(userId) {
-    const rows = db.prepare('SELECT category, monthlyLimitCents FROM budgets WHERE userId = ?').all(userId);
+    const rows = db
+      .prepare('SELECT category, monthlyLimitCents, rollover, createdAt FROM budgets WHERE userId = ?')
+      .all(userId);
     return new Map(
-      rows.map(r => [r.category.toLowerCase().trim(), { category: r.category, limitCents: r.monthlyLimitCents }])
+      rows.map(r => [
+        r.category.toLowerCase().trim(),
+        {
+          category: r.category,
+          limitCents: r.monthlyLimitCents,
+          rollover: !!r.rollover,
+          startMonth: r.createdAt.slice(0, 7)
+        }
+      ])
     );
   }
 
@@ -49,18 +60,22 @@ class BudgetModel {
    * @param {number} monthlyLimit decimal amount
    * @returns {Promise<Object>}
    */
-  static async upsert(userId, category, monthlyLimit) {
+  static async upsert(userId, category, monthlyLimit, rollover) {
     const now = new Date().toISOString();
     db.prepare(
-      `INSERT INTO budgets (id, userId, category, monthlyLimitCents, createdAt)
-       VALUES (@id, @userId, @category, @monthlyLimitCents, @createdAt)
+      `INSERT INTO budgets (id, userId, category, monthlyLimitCents, rollover, createdAt)
+       VALUES (@id, @userId, @category, @monthlyLimitCents, @rollover, @createdAt)
        ON CONFLICT (userId, category)
-       DO UPDATE SET monthlyLimitCents = @monthlyLimitCents, updatedAt = @createdAt`
+       DO UPDATE SET monthlyLimitCents = @monthlyLimitCents,
+                     rollover = COALESCE(@rolloverOrNull, rollover),
+                     updatedAt = @createdAt`
     ).run({
       id: uuidv4(),
       userId,
       category: category.trim(),
       monthlyLimitCents: toCents(monthlyLimit),
+      rollover: rollover ? 1 : 0,
+      rolloverOrNull: rollover === undefined ? null : rollover ? 1 : 0,
       createdAt: now
     });
 

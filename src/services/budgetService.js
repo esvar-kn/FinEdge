@@ -6,6 +6,19 @@ import { monthRange } from '../utils/dates.js';
 
 const toAmount = (cents) => cents / 100;
 
+/** Lists the YYYY-MM months in [startMonth, endMonthExclusive). */
+function monthsBetween(startMonth, endMonthExclusive) {
+  const out = [];
+  let [y, m] = startMonth.split('-').map(Number);
+  const [ey, em] = endMonthExclusive.split('-').map(Number);
+  while (y < ey || (y === ey && m < em)) {
+    out.push(`${y}-${String(m).padStart(2, '0')}`);
+    m += 1;
+    if (m > 12) { m = 1; y += 1; }
+  }
+  return out;
+}
+
 class BudgetService {
   /**
    * Lists the user's budgets.
@@ -23,9 +36,9 @@ class BudgetService {
    * @param {number} monthlyLimit
    * @returns {Promise<Object>}
    */
-  static async setBudget(userId, category, monthlyLimit) {
+  static async setBudget(userId, category, monthlyLimit, rollover) {
     const resolved = await CategoryService.resolve(userId, category);
-    return BudgetModel.upsert(userId, resolved, monthlyLimit);
+    return BudgetModel.upsert(userId, resolved, monthlyLimit, rollover);
   }
 
   /**
@@ -55,17 +68,51 @@ class BudgetService {
 
     const spent = await TransactionModel.expenseCentsByCategory(userId, monthRange(month));
 
-    return [...limits.entries()].map(([key, { category, limitCents }]) => {
+    // Carry-over for rollover budgets: for each prior month since the budget
+    // was created, add (limit - spent) to the available envelope. The current
+    // limit is applied to all prior months (we don't store historical limits).
+    const carriedByKey = new Map();
+    const rolloverEntries = [...limits.entries()].filter(([, v]) => v.rollover);
+    if (rolloverEntries.length > 0) {
+      const earliestStart = rolloverEntries
+        .map(([, v]) => v.startMonth)
+        .sort()[0];
+      if (earliestStart < month) {
+        const fromIso = monthRange(earliestStart).from;
+        const toExclusiveIso = monthRange(month).from; // up to, not including, the requested month
+        const rows = await TransactionModel.monthlyExpenseCentsByCategory(userId, fromIso, toExclusiveIso);
+        const spentByMonthKey = new Map(rows.map(r => [`${r.month}|${r.category}`, r.cents]));
+
+        for (const [key, { limitCents, startMonth }] of rolloverEntries) {
+          let carried = 0;
+          for (const m of monthsBetween(startMonth, month)) {
+            const monthSpent = spentByMonthKey.get(`${m}|${key}`) || 0;
+            carried += limitCents - monthSpent;
+          }
+          carriedByKey.set(key, carried);
+        }
+      }
+    }
+
+    return [...limits.entries()].map(([key, { category, limitCents, rollover }]) => {
       const spentCents = spent.get(key) || 0;
-      const percentUsed = Math.round((spentCents / limitCents) * 1000) / 10;
+      const carriedCents = rollover ? (carriedByKey.get(key) || 0) : 0;
+      const availableCents = limitCents + carriedCents;
+      // Percent is relative to the available envelope; guard against a zero/
+      // negative envelope so an overspent carry-over still reads as "over".
+      const percentUsed = availableCents > 0
+        ? Math.round((spentCents / availableCents) * 1000) / 10
+        : (spentCents > 0 ? 1000 : 0);
       return {
         category,
         month,
         monthlyLimit: toAmount(limitCents),
+        rollover,
+        ...(rollover ? { carriedOver: toAmount(carriedCents), available: toAmount(availableCents) } : {}),
         spent: toAmount(spentCents),
-        remaining: toAmount(limitCents - spentCents),
+        remaining: toAmount(availableCents - spentCents),
         percentUsed,
-        status: spentCents > limitCents ? 'over' : percentUsed >= 80 ? 'warning' : 'ok'
+        status: spentCents > availableCents ? 'over' : percentUsed >= 80 ? 'warning' : 'ok'
       };
     });
   }
