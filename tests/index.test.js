@@ -8,3 +8,4 @@ import './lowimpact.suite.js';
 import './enhancements.suite.js';
 import './auth-recovery.suite.js';
 import './accounts.suite.js';
+import './moneymodel.suite.js';

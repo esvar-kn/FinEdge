@@ -159,6 +159,14 @@ Captures a user's net worth once per calendar day so it can be charted over time
 | `date` | `string` | `YYYY-MM-DD`, unique per user (one row per day) | Calendar day of the snapshot. |
 | `netWorthCents` | `integer` | May be negative | Net worth in minor units on that day. |
 
+### 3.6. Money-model depth (additional tables/columns)
+- **`budgets.rollover`** (boolean): opt-in envelope rollover. The budget status for a month adds the carry-over from each prior month since creation (`limit − spent`), so `available = limit + carriedOver` and status is measured against `available`.
+- **`debts`**: `{id, userId, name, kind, balanceCents, aprBps, minPaymentCents}`. Payoff is projected by month-by-month amortization in `utils/debt.js`; it is computed, never stored.
+- **`transaction_tags`** (`transactionId, tag`): many tags per transaction, lowercased; filterable via `?tag=`.
+- **`transaction_splits`** (`id, transactionId, category, amountCents`): a transaction's amount re-sliced across categories. Splits must sum to the transaction amount and re-slice category breakdowns (summary, budgets, year report) **without changing income/expense totals**.
+- **`transactions.receipt`** (filename): one receipt image per transaction, stored under `UPLOAD_DIR` (git-ignored), served/removed through the receipt endpoints.
+- **`accounts.currency`** + **`exchange_rates`** (`code, perUsd, asOf`): per-account currency, with net worth converted into the user's display currency using rates kept as units-per-USD (seeded with static defaults, refreshed daily best-effort).
+
 ---
 
 ## 4. Component Interface Design

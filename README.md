@@ -10,16 +10,19 @@ FinEdge is a clean, modular RESTful API backend for tracking personal finances �
 | Accounts | Multiple wallets (checking, savings, credit, cash, other) with opening balances, derived per-account balance, total net worth, and a daily net-worth history series for charting |
 | Transfers | Move money between accounts without polluting income/expense analytics |
 | Analytics | Exact SQL-computed summaries, all-time or per-month, plus a per-month trend series for charting |
-| Budgets | Monthly per-category limits with `ok` / `warning` / `over` status folded into insights |
+| Budgets | Monthly per-category limits with `ok` / `warning` / `over` status folded into insights; opt-in envelope **rollover** carries unspent/overspent budget into later months |
+| Debts | Loans, cards, and mortgages with balance, APR, and minimum payment, plus an amortized **payoff projection** (months, total interest) at any monthly payment |
+| Tags & splits | Multiple tags per transaction (filterable) and **split transactions** that re-slice one amount across several categories without changing totals |
+| Receipts | Attach a receipt image to any transaction (upload, download, delete) |
 | Recurring | Daily/weekly/monthly/yearly rules that auto-materialize with catch-up after downtime |
 | Import/Export | CSV export honoring all filters; CSV import with per-row error reporting |
 | Categories | Case, whitespace, and plural variants fold onto one category; used + suggested category listing |
 | Goals | Savings goals with target, deadline, contributions, and progress tracking |
-| Currency | Per-user display currency (10 supported) reflected across the whole app |
+| Currency | Per-user display currency and **per-account currency** (10 supported); net worth converts mixed-currency accounts into the display currency using cached daily exchange rates |
 | Insights | Rule-based advice out of the box; optional AI-generated advice via the Groq API (free tier); month-end forecast, bill reminders, and year reports |
 | Accounts | Register, login with optional "remember me" (30-day token), password reset, profile, account deletion |
 | Security | JWT auth, bcrypt hashing, helmet headers, opt-in CORS, rate-limited auth endpoints |
-| Reliability | WAL-mode SQLite, foreign keys with cascade, daily backups with retention, 91 automated tests |
+| Reliability | WAL-mode SQLite, foreign keys with cascade, daily backups with retention, 106 automated tests |
 | Frontend | Connected single-page web UI (served by the backend) with an installable PWA manifest |
 
 ---
@@ -48,7 +51,9 @@ FinEdge/
 │   │   ├── categoryRoutes.js      # Category listing route
 │   │   ├── goalRoutes.js          # Savings goal routes
 │   │   ├── accountRoutes.js       # Account (wallet) routes
-│   │   └── transferRoutes.js      # Account-to-account transfer routes
+│   │   ├── transferRoutes.js      # Account-to-account transfer routes
+│   │   ├── debtRoutes.js          # Debt tracking + payoff routes
+│   │   └── rateRoutes.js          # Exchange rate routes
 │   ├── controllers/
 │   │   ├── userController.js      # Register, login, profile, password, delete account
 │   │   ├── transactionController.js # Query parsing, pagination metadata, CSV responses
@@ -56,7 +61,9 @@ FinEdge/
 │   │   ├── recurringController.js # Recurring rule CRUD
 │   │   ├── goalController.js      # Savings goal CRUD and contributions
 │   │   ├── accountController.js   # Account CRUD with net worth
-│   │   └── transferController.js  # Transfer CRUD
+│   │   ├── transferController.js  # Transfer CRUD
+│   │   ├── debtController.js      # Debt CRUD, payments, payoff
+│   │   └── rateController.js      # Exchange rate listing
 │   ├── services/
 │   │   ├── userService.js         # Password hashing, JWT signing, credential checks
 │   │   ├── transactionService.js  # Transaction logic, summaries, CSV import/export
@@ -67,6 +74,8 @@ FinEdge/
 │   │   ├── accountService.js      # Account logic, balances, net worth, delete guards
 │   │   ├── transferService.js     # Transfer logic with account ownership checks
 │   │   ├── netWorthService.js     # Daily net-worth snapshots + history
+│   │   ├── debtService.js         # Debt logic + payoff projection
+│   │   ├── rateService.js         # Exchange rates: seed, refresh, convert
 │   │   └── aiInsightsService.js   # Groq-powered advice with rule-based fallback
 │   ├── models/
 │   │   ├── userModel.js           # Users table access
@@ -77,7 +86,9 @@ FinEdge/
 │   │   ├── goalModel.js           # Savings goals table access
 │   │   ├── accountModel.js        # Accounts table access + derived balances
 │   │   ├── transferModel.js       # Transfers table access
-│   │   └── netWorthModel.js       # Net-worth snapshot upsert + history
+│   │   ├── netWorthModel.js       # Net-worth snapshot upsert + history
+│   │   ├── debtModel.js           # Debts table access
+│   │   └── rateModel.js           # Exchange rates table access
 │   ├── middleware/
 │   │   ├── logger.js              # Request logger with timing metrics
 │   │   ├── errorHandler.js        # Centralized operational AppError handling
@@ -88,6 +99,7 @@ FinEdge/
 │   │   ├── currency.js            # Supported currencies + validation
 │   │   ├── dates.js               # Date validation, month ranges, recurrence arithmetic
 │   │   ├── csv.js                 # Dependency-free RFC-4180 CSV encode/parse
+│   │   ├── debt.js                # Amortized payoff projection math
 │   │   └── backup.js              # Automated daily DB snapshots with retention
 │   └── data/
 │       ├── finedge.db             # SQLite database (created on first run)
@@ -105,7 +117,8 @@ FinEdge/
 │   ├── lowimpact.suite.js         # Categories, AI insights, security headers
 │   ├── enhancements.suite.js      # Currency, goals, reminders, forecast, report
 │   ├── auth-recovery.suite.js     # Password reset and remember-me
-│   └── accounts.suite.js          # Accounts, transfers, balances, net worth
+│   ├── accounts.suite.js          # Accounts, transfers, balances, net worth
+│   └── moneymodel.suite.js        # Rollover, debts, tags/splits, receipts, currency
 ├── FrontEnd/                      # Web UI assets and design mockups (work in progress)
 ├── .env.example                   # Environment configuration template
 ├── .gitignore                     # Excluded workspace files (DB, backups, secrets)
@@ -139,6 +152,7 @@ FinEdge/
    | `DB_PATH` | `src/data/finedge.db` | SQLite database file |
    | `BACKUP_DIR` | `src/data/backups` | Where daily snapshots are written |
    | `BACKUP_KEEP` | `7` | Number of snapshots retained |
+   | `UPLOAD_DIR` | `src/data/uploads` | Where uploaded receipt images are stored |
    | `SAVINGS_WARNING_THRESHOLD` | `0.70` | Expense/income ratio that triggers the savings warning |
    | `GROQ_API_KEY` | — | Optional. Enables AI insights; free key at [console.groq.com](https://console.groq.com) |
    | `AI_MODEL` | `llama-3.3-70b-versatile` | Groq model used for AI insights |
@@ -175,7 +189,7 @@ FinEdge/
 ## Testing
 
 ```bash
-npm test              # run all 91 tests
+npm test              # run all 106 tests
 npm run test:coverage # run with c8 coverage reporting
 ```
 
@@ -207,10 +221,13 @@ Base URL: `http://localhost:3000`. All routes except registration, login, and th
 ### 2. Transaction Management Routes
 | Method | Endpoint | Auth | Description |
 | :--- | :--- | :--- | :--- |
-| **POST** | `/api/transactions` | Bearer | Creates a transaction (type: `income` or `expense`) |
+| **POST** | `/api/transactions` | Bearer | Creates a transaction (type: `income` or `expense`); optional `accountId`, `tags: [...]`, and `splits: [{category, amount}]` |
 | **GET** | `/api/transactions` | Bearer | Retrieves transactions with filters, search, sorting, and pagination (see below) |
-| **PUT** | `/api/transactions/:id` | Bearer | Updates a transaction's fields (verifies ownership) |
-| **DELETE** | `/api/transactions/:id` | Bearer | Deletes a transaction (verifies ownership) |
+| **PUT** | `/api/transactions/:id` | Bearer | Updates a transaction's fields, incl. `tags`/`splits` (verifies ownership) |
+| **DELETE** | `/api/transactions/:id` | Bearer | Deletes a transaction and its receipt (verifies ownership) |
+| **POST** | `/api/transactions/:id/receipt` | Bearer | Uploads a receipt image (raw image bytes, `Content-Type: image/png\|jpeg\|webp\|gif`, ≤5 MB) |
+| **GET** | `/api/transactions/:id/receipt` | Bearer | Downloads the receipt image |
+| **DELETE** | `/api/transactions/:id/receipt` | Bearer | Removes the receipt image |
 | **GET** | `/api/transactions/summary` | Bearer | Balance sheet, category breakdown, budget status, and insights. `?month=YYYY-MM` restricts to one month |
 | **GET** | `/api/transactions/trend` | Bearer | Per-month income/expense totals for charting (`?months=N`, default 6, max 24) |
 | **GET** | `/api/transactions/forecast` | Bearer | Projects the current month's end-of-month income/expense/net (actuals so far + recurring still due before month end) |
@@ -227,20 +244,25 @@ Transaction `date` values are validated (`YYYY-MM-DD` or ISO-8601) and normalize
 | `type` | `income` \| `expense` | Filter by transaction type |
 | `category` | string | Filter by category (case-insensitive) |
 | `accountId` | string | Filter to one account's transactions |
+| `tag` | string | Filter to transactions carrying this tag |
 | `q` | string | Case-insensitive substring search over descriptions |
 | `from`, `to` | `YYYY-MM-DD` or ISO timestamp | Date range; `to` given as a date includes that whole day |
 | `sort` | `date` (default) \| `amount` \| `category` \| `createdAt` | Sort field |
 | `order` | `desc` (default) \| `asc` | Sort direction |
 | `page`, `limit` | integers (limit ≤ 100, default 20) | Optional pagination; response then includes `total`, `page`, `limit`, and `totalPages`. Omit both to receive all matching rows |
 
+**Tags** are lowercased, trimmed, and de-duplicated on write; a transaction's `tags` array is returned when non-empty and filterable with `?tag=`. **Splits** (`splits: [{category, amount}]`) must sum exactly to the transaction amount; when present they re-slice how the expense is attributed across categories in the summary, budgets, and year report — but they never change the income/expense **totals**.
+
 ### 3. Budget Routes (monthly, per expense category)
 | Method | Endpoint | Auth | Description |
 | :--- | :--- | :--- | :--- |
 | **GET** | `/api/budgets` | Bearer | Lists budgets with spend-vs-limit status (`?month=YYYY-MM`, default current month) |
-| **PUT** | `/api/budgets/:category` | Bearer | Creates or updates a category's monthly budget: `{ "limit": number }` |
+| **PUT** | `/api/budgets/:category` | Bearer | Creates or updates a category's monthly budget: `{ "limit": number, "rollover"?: boolean }` |
 | **DELETE** | `/api/budgets/:category` | Bearer | Removes a category budget |
 
 Each budget status entry reports `spent`, `remaining`, `percentUsed`, and a `status` of `ok` (< 80%), `warning` (≥ 80%), or `over` (> 100%). Over-budget and warning categories also surface in the summary's `insights`.
+
+When a budget has **`rollover: true`**, unspent (or overspent) amounts carry forward: for the requested month, each prior month since the budget was created contributes `limit − spent`, and the status adds `carriedOver` and `available` (= limit + carry-over). `remaining`, `percentUsed`, and `status` are then measured against `available`.
 
 ### 4. Recurring Transaction Routes
 | Method | Endpoint | Auth | Description |
@@ -292,12 +314,29 @@ Transactions accept an optional **`accountId`** on create and update (ownership-
 
 Transfers are stored in their own table — **they are not income or expense**, so they move account balances and net worth but never appear in `/summary`, budgets, trend, forecast, or the year report. A transfer must be between two different accounts, both owned by the caller, for a positive amount.
 
-### 9. Category & Currency
+### 9. Debt Routes
+| Method | Endpoint | Auth | Description |
+| :--- | :--- | :--- | :--- |
+| **GET** | `/api/debts` | Bearer | Lists debts, each with a payoff projection at its minimum payment |
+| **POST** | `/api/debts` | Bearer | Creates a debt: `{ "name", "kind": "loan"\|"credit_card"\|"mortgage"\|"student"\|"personal"\|"other", "balance", "apr"?, "minPayment"? }` |
+| **PUT** | `/api/debts/:id` | Bearer | Updates a debt's fields |
+| **GET** | `/api/debts/:id/payoff` | Bearer | Payoff projection at `?monthlyPayment=N` (default: the debt's minimum payment) |
+| **POST** | `/api/debts/:id/payment` | Bearer | Records a payment, reducing the balance (clamped at 0): `{ "amount" }` |
+| **DELETE** | `/api/debts/:id` | Bearer | Deletes a debt |
+
+`apr` is a percentage (e.g. `19.99`). The payoff projection amortizes month by month over integer cents and returns `{ feasible, months, totalInterest, totalPaid }`; when the monthly payment cannot cover the first month's interest it reports `feasible: false`.
+
+### 10. Rate Routes
+| Method | Endpoint | Auth | Description |
+| :--- | :--- | :--- | :--- |
+| **GET** | `/api/rates` | Bearer | Current exchange rates: `{ base: "USD", asOf, rates: { CODE: perUsd } }` |
+
+### 11. Category & Currency
 | Method | Endpoint | Auth | Description |
 | :--- | :--- | :--- | :--- |
 | **GET** | `/api/categories` | Bearer | Used categories plus unused default suggestions |
 
-Currency is a **per-user display preference** set via `PUT /api/users/settings` (see the user routes above). Ten currencies are supported (USD, EUR, GBP, INR, JPY, CAD, AUD, SGD, AED, CHF); the frontend formats every amount with the chosen currency. Amounts are stored currency-neutrally as integer minor units — **FinEdge does not convert between currencies**.
+Currency has two levels: a **per-user display preference** (`PUT /api/users/settings`) and a **per-account currency** (set on account create/update). Ten currencies are supported (USD, EUR, GBP, INR, JPY, CAD, AUD, SGD, AED, CHF). Transaction amounts within one account are stored currency-neutrally as integer minor units; for **net worth**, each account's balance is converted into the display currency using exchange rates (units per USD) kept in the `exchange_rates` table. Rates are seeded with static defaults on first run and refreshed daily from a free public API (best-effort; the seed is used offline and in tests). Each account's status carries both `balance` (its own currency) and `balanceInDisplayCurrency`.
 
 ---
 
