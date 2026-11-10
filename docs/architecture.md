@@ -121,6 +121,33 @@ Represents financial entries logged by users.
 | `description`| `string` | Optional (default: `""`) | Optional context/notes on the expense. |
 | `date` | `string (ISO)`| Default: Current Timestamp | Date the transaction took place. |
 | `createdAt` | `string (ISO)`| Default: Current Timestamp | Database record creation timestamp. |
+| `accountId` | `UUID (string)`| Optional, Foreign Key -> `accounts.id`, `ON DELETE SET NULL` | The wallet the entry belongs to; `null` means unassigned. |
+
+### 3.3. Account Schema (`accounts` table)
+Represents a user's wallets (checking, savings, credit, cash, other). Each account stores only an **opening balance**; its live balance is **derived**, never persisted.
+
+| Property Name | Data Type | Database Constraint / Rules | Description |
+| :--- | :--- | :--- | :--- |
+| `id` | `UUID (string)` | Primary Key, Auto-generated | Unique identifier for the account. |
+| `userId` | `UUID (string)` | Foreign Key -> `users.id`, `ON DELETE CASCADE` | The owner. |
+| `name` | `string` | Required, unique per user (case-insensitive) | Display name of the wallet. |
+| `type` | `string` | Enum: `['checking','savings','credit','cash','other']` | Account kind. |
+| `openingBalanceCents` | `integer` | Default 0 (may be negative for credit) | Starting balance in minor units. |
+| `archived` | `boolean` | Default false | Archived accounts are excluded from net worth. |
+
+### 3.4. Transfer Schema (`transfers` table)
+Represents money moved between two of a user's own accounts. Transfers are **deliberately separate from `transactions`** so they adjust account balances and net worth but never count as income or expense in any analytics (summary, budgets, trend, forecast, year report).
+
+| Property Name | Data Type | Database Constraint / Rules | Description |
+| :--- | :--- | :--- | :--- |
+| `id` | `UUID (string)` | Primary Key, Auto-generated | Unique identifier for the transfer. |
+| `userId` | `UUID (string)` | Foreign Key -> `users.id`, `ON DELETE CASCADE` | The owner. |
+| `fromAccountId` | `UUID (string)` | Foreign Key -> `accounts.id`, `ON DELETE CASCADE` | Source account. |
+| `toAccountId` | `UUID (string)` | Foreign Key -> `accounts.id`, `ON DELETE CASCADE` | Destination account (must differ from source). |
+| `amountCents` | `integer` | Required, > 0 | Amount moved, in minor units. |
+| `date` | `string (ISO)`| Default: Current Timestamp | When the transfer took place. |
+
+**Derived balance:** `openingBalanceCents + Σ(income) − Σ(expense) + Σ(transfers in) − Σ(transfers out)`, computed in SQL over integer cents. **Net worth** is the sum of all non-archived account balances; credit accounts carry negative balances, so liabilities net out correctly.
 
 ---
 

@@ -7,6 +7,8 @@ FinEdge is a clean, modular RESTful API backend for tracking personal finances �
 | Area | What you get |
 | :--- | :--- |
 | Transactions | Full CRUD with ownership checks, filters, description search, date ranges, sorting, and pagination |
+| Accounts | Multiple wallets (checking, savings, credit, cash, other) with opening balances, derived per-account balance, and total net worth |
+| Transfers | Move money between accounts without polluting income/expense analytics |
 | Analytics | Exact SQL-computed summaries, all-time or per-month, plus a per-month trend series for charting |
 | Budgets | Monthly per-category limits with `ok` / `warning` / `over` status folded into insights |
 | Recurring | Daily/weekly/monthly/yearly rules that auto-materialize with catch-up after downtime |
@@ -17,7 +19,7 @@ FinEdge is a clean, modular RESTful API backend for tracking personal finances �
 | Insights | Rule-based advice out of the box; optional AI-generated advice via the Groq API (free tier); month-end forecast, bill reminders, and year reports |
 | Accounts | Register, login with optional "remember me" (30-day token), password reset, profile, account deletion |
 | Security | JWT auth, bcrypt hashing, helmet headers, opt-in CORS, rate-limited auth endpoints |
-| Reliability | WAL-mode SQLite, foreign keys with cascade, daily backups with retention, 77 automated tests |
+| Reliability | WAL-mode SQLite, foreign keys with cascade, daily backups with retention, 88 automated tests |
 | Frontend | Connected single-page web UI (served by the backend) with an installable PWA manifest |
 
 ---
@@ -44,12 +46,17 @@ FinEdge/
 │   │   ├── budgetRoutes.js        # Per-category monthly budget routes
 │   │   ├── recurringRoutes.js     # Recurring transaction rule routes
 │   │   ├── categoryRoutes.js      # Category listing route
-│   │   └── goalRoutes.js          # Savings goal routes
+│   │   ├── goalRoutes.js          # Savings goal routes
+│   │   ├── accountRoutes.js       # Account (wallet) routes
+│   │   └── transferRoutes.js      # Account-to-account transfer routes
 │   ├── controllers/
 │   │   ├── userController.js      # Register, login, profile, password, delete account
 │   │   ├── transactionController.js # Query parsing, pagination metadata, CSV responses
 │   │   ├── budgetController.js    # Budget CRUD with month validation
-│   │   └── recurringController.js # Recurring rule CRUD
+│   │   ├── recurringController.js # Recurring rule CRUD
+│   │   ├── goalController.js      # Savings goal CRUD and contributions
+│   │   ├── accountController.js   # Account CRUD with net worth
+│   │   └── transferController.js  # Transfer CRUD
 │   ├── services/
 │   │   ├── userService.js         # Password hashing, JWT signing, credential checks
 │   │   ├── transactionService.js  # Transaction logic, summaries, CSV import/export
@@ -57,6 +64,8 @@ FinEdge/
 │   │   ├── recurringService.js    # Rule materialization with catch-up
 │   │   ├── categoryService.js     # Category normalization and suggestions
 │   │   ├── goalService.js         # Savings goal logic and progress
+│   │   ├── accountService.js      # Account logic, balances, net worth, delete guards
+│   │   ├── transferService.js     # Transfer logic with account ownership checks
 │   │   └── aiInsightsService.js   # Groq-powered advice with rule-based fallback
 │   ├── models/
 │   │   ├── userModel.js           # Users table access
@@ -64,7 +73,9 @@ FinEdge/
 │   │   ├── budgetModel.js         # Budgets table access
 │   │   ├── recurringModel.js      # Recurring rules table access
 │   │   ├── categoryModel.js       # Distinct categories across all tables
-│   │   └── goalModel.js           # Savings goals table access
+│   │   ├── goalModel.js           # Savings goals table access
+│   │   ├── accountModel.js        # Accounts table access + derived balances
+│   │   └── transferModel.js       # Transfers table access
 │   ├── middleware/
 │   │   ├── logger.js              # Request logger with timing metrics
 │   │   ├── errorHandler.js        # Centralized operational AppError handling
@@ -91,7 +102,8 @@ FinEdge/
 │   ├── highimpact.suite.js        # Dates, budgets, recurring rules, CSV
 │   ├── lowimpact.suite.js         # Categories, AI insights, security headers
 │   ├── enhancements.suite.js      # Currency, goals, reminders, forecast, report
-│   └── auth-recovery.suite.js     # Password reset and remember-me
+│   ├── auth-recovery.suite.js     # Password reset and remember-me
+│   └── accounts.suite.js          # Accounts, transfers, balances, net worth
 ├── FrontEnd/                      # Web UI assets and design mockups (work in progress)
 ├── .env.example                   # Environment configuration template
 ├── .gitignore                     # Excluded workspace files (DB, backups, secrets)
@@ -161,7 +173,7 @@ FinEdge/
 ## Testing
 
 ```bash
-npm test              # run all 77 tests
+npm test              # run all 88 tests
 npm run test:coverage # run with c8 coverage reporting
 ```
 
@@ -212,6 +224,7 @@ Transaction `date` values are validated (`YYYY-MM-DD` or ISO-8601) and normalize
 | :--- | :--- | :--- |
 | `type` | `income` \| `expense` | Filter by transaction type |
 | `category` | string | Filter by category (case-insensitive) |
+| `accountId` | string | Filter to one account's transactions |
 | `q` | string | Case-insensitive substring search over descriptions |
 | `from`, `to` | `YYYY-MM-DD` or ISO timestamp | Date range; `to` given as a date includes that whole day |
 | `sort` | `date` (default) \| `amount` \| `category` \| `createdAt` | Sort field |
@@ -253,7 +266,28 @@ Categories are normalized on every write (transactions, budgets, recurring rules
 | **POST** | `/api/goals/:id/contribute` | Bearer | Adds `{ "amount" }` to the saved balance (negative withdraws; clamped at 0) |
 | **DELETE** | `/api/goals/:id` | Bearer | Deletes a goal |
 
-### 7. Category & Currency
+### 7. Account (Wallet) Routes
+| Method | Endpoint | Auth | Description |
+| :--- | :--- | :--- | :--- |
+| **GET** | `/api/accounts` | Bearer | Lists accounts with a derived `balance`, plus top-level `netWorth` (sum of non-archived account balances) |
+| **POST** | `/api/accounts` | Bearer | Creates an account: `{ "name", "type": "checking"\|"savings"\|"credit"\|"cash"\|"other", "openingBalance"? }` |
+| **PUT** | `/api/accounts/:id` | Bearer | Updates name/type/openingBalance, or sets `{ "archived": true }` to exclude it from net worth |
+| **DELETE** | `/api/accounts/:id` | Bearer | Deletes an account. Returns 409 if transactions still reference it, unless `?reassignTo=<accountId>` moves them to another owned account; 409 if transfers reference it (delete those first) |
+
+An account's **balance is derived, never stored**: `openingBalance + income − expenses + transfers in − transfers out`, computed in SQL over integer cents. Credit accounts simply carry a negative balance, so liabilities net out of net worth correctly. Account names are unique per user (case-insensitive).
+
+Transactions accept an optional **`accountId`** on create and update (ownership-checked), and the list endpoint supports `?accountId=` as a filter. Existing transactions without an account stay valid as "unassigned," and if an account is deleted its transactions are kept (reassigned or set unassigned) — analytics never break.
+
+### 8. Transfer Routes
+| Method | Endpoint | Auth | Description |
+| :--- | :--- | :--- | :--- |
+| **GET** | `/api/transfers` | Bearer | Lists transfers, newest first |
+| **POST** | `/api/transfers` | Bearer | Moves money between two owned accounts: `{ "fromAccountId", "toAccountId", "amount", "description"?, "date"? }` |
+| **DELETE** | `/api/transfers/:id` | Bearer | Deletes a transfer (verifies ownership) |
+
+Transfers are stored in their own table — **they are not income or expense**, so they move account balances and net worth but never appear in `/summary`, budgets, trend, forecast, or the year report. A transfer must be between two different accounts, both owned by the caller, for a positive amount.
+
+### 9. Category & Currency
 | Method | Endpoint | Auth | Description |
 | :--- | :--- | :--- | :--- |
 | **GET** | `/api/categories` | Bearer | Used categories plus unused default suggestions |
