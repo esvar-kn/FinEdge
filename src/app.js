@@ -13,9 +13,12 @@ import categoryRoutes from './routes/categoryRoutes.js';
 import goalRoutes from './routes/goalRoutes.js';
 import accountRoutes from './routes/accountRoutes.js';
 import transferRoutes from './routes/transferRoutes.js';
+import debtRoutes from './routes/debtRoutes.js';
+import rateRoutes from './routes/rateRoutes.js';
 import { scheduleBackups } from './utils/backup.js';
 import RecurringService from './services/recurringService.js';
 import NetWorthService from './services/netWorthService.js';
+import RateService from './services/rateService.js';
 
 import { fileURLToPath } from 'url';
 import path from 'path';
@@ -65,6 +68,8 @@ app.use('/api/categories', categoryRoutes);
 app.use('/api/goals', goalRoutes);
 app.use('/api/accounts', accountRoutes);
 app.use('/api/transfers', transferRoutes);
+app.use('/api/debts', debtRoutes);
+app.use('/api/rates', rateRoutes);
 
 // Serve static frontend files
 app.use(express.static(path.join(path.dirname(fileURLToPath(import.meta.url)), '../FrontEnd')));
@@ -85,6 +90,8 @@ const isMain = process.argv[1] && (
 
 if (isMain) {
   scheduleBackups();
+  // Seed exchange rates and attempt a daily live refresh (best-effort).
+  RateService.scheduleRefresh();
   // Materialize any recurring transactions that came due while the server was off.
   RecurringService.materializeAll()
     .then(created => {

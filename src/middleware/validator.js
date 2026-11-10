@@ -149,11 +149,33 @@ export function validateTransaction(req, res, next) {
     errors.push('Date must be a valid YYYY-MM-DD or ISO-8601 date string.');
   }
 
+  validateTagsAndSplits(req.body, errors);
+
   if (errors.length > 0) {
     return next(new AppError(errors.join(' | '), 400));
   }
 
   next();
+}
+
+/**
+ * Shared shape checks for optional `tags` and `splits` on transaction payloads.
+ * The split-sum-equals-amount rule is enforced in the service (it needs the
+ * effective amount), so this only validates structure.
+ */
+function validateTagsAndSplits(body, errors) {
+  if (body.tags !== undefined) {
+    if (!Array.isArray(body.tags) || body.tags.some(t => typeof t !== 'string')) {
+      errors.push('tags must be an array of strings.');
+    }
+  }
+  if (body.splits !== undefined) {
+    if (!Array.isArray(body.splits) || body.splits.length === 0) {
+      errors.push('splits must be a non-empty array of { category, amount }.');
+    } else if (body.splits.some(s => !s || typeof s.category !== 'string' || isNaN(parseFloat(s.amount)) || parseFloat(s.amount) <= 0)) {
+      errors.push('Each split needs a non-empty category and a positive amount.');
+    }
+  }
 }
 
 /**
@@ -184,6 +206,8 @@ export function validateTransactionUpdate(req, res, next) {
     errors.push('Date must be a valid YYYY-MM-DD or ISO-8601 date string.');
   }
 
+  validateTagsAndSplits(req.body, errors);
+
   if (errors.length > 0) {
     return next(new AppError(errors.join(' | '), 400));
   }
@@ -205,6 +229,10 @@ export function validateBudget(req, res, next) {
 
   if (!req.params.category || req.params.category.trim().length === 0) {
     errors.push('Category must be a non-empty string.');
+  }
+
+  if (req.body.rollover !== undefined && typeof req.body.rollover !== 'boolean') {
+    errors.push('rollover must be a boolean.');
   }
 
   if (errors.length > 0) {
@@ -318,6 +346,9 @@ export function validateAccount(req, res, next) {
   if (openingBalance !== undefined && isNaN(parseFloat(openingBalance))) {
     errors.push('openingBalance must be a number.');
   }
+  if (req.body.currency !== undefined && typeof req.body.currency !== 'string') {
+    errors.push('currency must be a string (a supported currency code).');
+  }
 
   if (errors.length > 0) {
     return next(new AppError(errors.join(' | '), 400));
@@ -333,6 +364,10 @@ export function validateAccount(req, res, next) {
 export function validateAccountUpdate(req, res, next) {
   const { name, type, openingBalance, archived } = req.body;
   const errors = [];
+
+  if (req.body.currency !== undefined && typeof req.body.currency !== 'string') {
+    errors.push('currency must be a string (a supported currency code).');
+  }
 
   if (name !== undefined && (typeof name !== 'string' || name.trim().length === 0)) {
     errors.push('Name must be a non-empty string.');
@@ -381,6 +416,50 @@ export function validateTransfer(req, res, next) {
     return next(new AppError(errors.join(' | '), 400));
   }
 
+  next();
+}
+
+const VALID_DEBT_KINDS = ['loan', 'credit_card', 'mortgage', 'student', 'personal', 'other'];
+
+/**
+ * Validates debt creation payloads.
+ */
+export function validateDebt(req, res, next) {
+  const { name, kind, balance, apr, minPayment } = req.body;
+  const errors = [];
+
+  if (!name || typeof name !== 'string' || name.trim().length === 0) {
+    errors.push('Name must be a non-empty string.');
+  }
+  if (!kind || !VALID_DEBT_KINDS.includes(kind)) {
+    errors.push(`Kind must be one of: ${VALID_DEBT_KINDS.join(', ')}.`);
+  }
+  const parsedBalance = parseFloat(balance);
+  if (balance === undefined || isNaN(parsedBalance) || parsedBalance < 0) {
+    errors.push('Balance must be a number of 0 or more.');
+  }
+  if (apr !== undefined && (isNaN(parseFloat(apr)) || parseFloat(apr) < 0)) {
+    errors.push('APR must be a non-negative number (percent, e.g. 19.99).');
+  }
+  if (minPayment !== undefined && (isNaN(parseFloat(minPayment)) || parseFloat(minPayment) < 0)) {
+    errors.push('minPayment must be a non-negative number.');
+  }
+
+  if (errors.length > 0) {
+    return next(new AppError(errors.join(' | '), 400));
+  }
+
+  next();
+}
+
+/**
+ * Validates a debt payment payload ({ amount }).
+ */
+export function validateDebtPayment(req, res, next) {
+  const parsed = parseFloat(req.body.amount);
+  if (req.body.amount === undefined || isNaN(parsed) || parsed <= 0) {
+    return next(new AppError('Amount must be a positive number greater than 0.', 400));
+  }
   next();
 }
 
