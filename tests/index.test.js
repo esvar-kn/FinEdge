@@ -7,3 +7,4 @@ import './highimpact.suite.js';
 import './lowimpact.suite.js';
 import './enhancements.suite.js';
 import './auth-recovery.suite.js';
+import './accounts.suite.js';
