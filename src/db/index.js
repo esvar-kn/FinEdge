@@ -74,12 +74,47 @@ db.exec(`
   );
 
   CREATE INDEX IF NOT EXISTS idx_goals_userId ON savings_goals(userId);
+
+  CREATE TABLE IF NOT EXISTS accounts (
+    id                  TEXT PRIMARY KEY,
+    userId              TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    name                TEXT NOT NULL,
+    type                TEXT NOT NULL CHECK (type IN ('checking', 'savings', 'credit', 'cash', 'other')),
+    openingBalanceCents INTEGER NOT NULL DEFAULT 0,
+    archived            INTEGER NOT NULL DEFAULT 0,
+    createdAt           TEXT NOT NULL,
+    updatedAt           TEXT,
+    UNIQUE (userId, name COLLATE NOCASE)
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_accounts_userId ON accounts(userId);
+
+  CREATE TABLE IF NOT EXISTS transfers (
+    id            TEXT PRIMARY KEY,
+    userId        TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    fromAccountId TEXT NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+    toAccountId   TEXT NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+    amountCents   INTEGER NOT NULL CHECK (amountCents > 0),
+    description   TEXT NOT NULL DEFAULT '',
+    date          TEXT NOT NULL,
+    createdAt     TEXT NOT NULL
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_transfers_userId ON transfers(userId);
+  CREATE INDEX IF NOT EXISTS idx_transfers_from ON transfers(fromAccountId);
+  CREATE INDEX IF NOT EXISTS idx_transfers_to ON transfers(toAccountId);
 `);
 
 // Lightweight migrations for databases created before a column existed.
 const txColumns = db.prepare("PRAGMA table_info('transactions')").all().map(c => c.name);
 if (!txColumns.includes('recurringRuleId')) {
   db.exec('ALTER TABLE transactions ADD COLUMN recurringRuleId TEXT');
+}
+// accountId is nullable so existing transactions stay valid as "unassigned";
+// ON DELETE SET NULL keeps the transaction (and its analytics) if its account
+// is later removed.
+if (!txColumns.includes('accountId')) {
+  db.exec('ALTER TABLE transactions ADD COLUMN accountId TEXT REFERENCES accounts(id) ON DELETE SET NULL');
 }
 
 const userColumns = db.prepare("PRAGMA table_info('users')").all().map(c => c.name);
