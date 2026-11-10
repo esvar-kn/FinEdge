@@ -114,6 +114,43 @@ db.exec(`
   );
 
   CREATE INDEX IF NOT EXISTS idx_networth_userId_date ON net_worth_snapshots(userId, date);
+
+  CREATE TABLE IF NOT EXISTS debts (
+    id             TEXT PRIMARY KEY,
+    userId         TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    name           TEXT NOT NULL,
+    kind           TEXT NOT NULL CHECK (kind IN ('loan', 'credit_card', 'mortgage', 'student', 'personal', 'other')),
+    balanceCents   INTEGER NOT NULL CHECK (balanceCents >= 0),
+    aprBps         INTEGER NOT NULL DEFAULT 0 CHECK (aprBps >= 0),
+    minPaymentCents INTEGER NOT NULL DEFAULT 0 CHECK (minPaymentCents >= 0),
+    createdAt      TEXT NOT NULL,
+    updatedAt      TEXT
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_debts_userId ON debts(userId);
+
+  CREATE TABLE IF NOT EXISTS transaction_tags (
+    transactionId TEXT NOT NULL REFERENCES transactions(id) ON DELETE CASCADE,
+    tag           TEXT NOT NULL,
+    PRIMARY KEY (transactionId, tag)
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_txtags_tag ON transaction_tags(tag);
+
+  CREATE TABLE IF NOT EXISTS transaction_splits (
+    id            TEXT PRIMARY KEY,
+    transactionId TEXT NOT NULL REFERENCES transactions(id) ON DELETE CASCADE,
+    category      TEXT NOT NULL,
+    amountCents   INTEGER NOT NULL CHECK (amountCents > 0)
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_txsplits_txId ON transaction_splits(transactionId);
+
+  CREATE TABLE IF NOT EXISTS exchange_rates (
+    code     TEXT PRIMARY KEY,
+    perUsd   REAL NOT NULL,
+    asOf     TEXT NOT NULL
+  );
 `);
 
 // Lightweight migrations for databases created before a column existed.
@@ -126,6 +163,22 @@ if (!txColumns.includes('recurringRuleId')) {
 // is later removed.
 if (!txColumns.includes('accountId')) {
   db.exec('ALTER TABLE transactions ADD COLUMN accountId TEXT REFERENCES accounts(id) ON DELETE SET NULL');
+}
+// Receipt image filename for a transaction (stored under the uploads dir).
+if (!txColumns.includes('receipt')) {
+  db.exec('ALTER TABLE transactions ADD COLUMN receipt TEXT');
+}
+
+// Opt-in envelope rollover: unspent (or overspent) budget carries into later months.
+const budgetColumns = db.prepare("PRAGMA table_info('budgets')").all().map(c => c.name);
+if (!budgetColumns.includes('rollover')) {
+  db.exec('ALTER TABLE budgets ADD COLUMN rollover INTEGER NOT NULL DEFAULT 0');
+}
+
+// Per-account currency (defaults to the user's display currency on create).
+const accountColumns = db.prepare("PRAGMA table_info('accounts')").all().map(c => c.name);
+if (accountColumns.length > 0 && !accountColumns.includes('currency')) {
+  db.exec("ALTER TABLE accounts ADD COLUMN currency TEXT NOT NULL DEFAULT 'USD'");
 }
 
 const userColumns = db.prepare("PRAGMA table_info('users')").all().map(c => c.name);

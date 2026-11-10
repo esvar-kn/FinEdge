@@ -28,6 +28,7 @@ src/data/*.db-wal
 src/data/*.db-shm
 src/data/backups/
 src/data/test-backups/
+src/data/uploads/
 !src/data/.gitkeep
 *.corrupt-*
 

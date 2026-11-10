@@ -44,6 +44,8 @@ export const config = {
   authRateLimitWindowMs: parseInt(process.env.AUTH_RATE_LIMIT_WINDOW_MS || String(15 * 60 * 1000), 10),
   backupDir: path.resolve(process.env.BACKUP_DIR || 'src/data/backups'),
   backupKeep: parseInt(process.env.BACKUP_KEEP || '7', 10),
+  // Where uploaded receipt images are stored (git-ignored).
+  uploadDir: path.resolve(process.env.UPLOAD_DIR || 'src/data/uploads'),
   // Legacy JSON store paths — only used by scripts/migrate-json-to-sqlite.js
   usersDbPath: path.resolve(process.env.USERS_DB_PATH || 'src/data/users.json'),
   transactionsDbPath: path.resolve(process.env.TRANSACTIONS_DB_PATH || 'src/data/transactions.json'),
