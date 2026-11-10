@@ -3,6 +3,7 @@ import RecurringModel from '../models/recurringModel.js';
 import BudgetService from './budgetService.js';
 import RecurringService from './recurringService.js';
 import CategoryService from './categoryService.js';
+import AccountService from './accountService.js';
 import { AppError } from '../middleware/errorHandler.js';
 import { generateInsights } from '../utils/insightHelper.js';
 import { normalizeDate, monthRange, currentMonth, advanceDate } from '../utils/dates.js';
@@ -137,13 +138,18 @@ class TransactionService {
    * @returns {Promise<Object>} The created transaction.
    */
   static async addTransaction(userId, data) {
+    if (data.accountId !== undefined && data.accountId !== null) {
+      // Verifies the account exists and is owned by the caller (throws 404/403).
+      await AccountService.getOwnedAccount(data.accountId, userId);
+    }
     const tx = await TransactionModel.create({
       userId,
       type: data.type,
       category: await CategoryService.resolve(userId, data.category),
       amount: data.amount,
       description: data.description,
-      date: data.date ? normalizeDate(data.date) : undefined
+      date: data.date ? normalizeDate(data.date) : undefined,
+      accountId: data.accountId || null
     });
     return tx;
   }
@@ -265,13 +271,24 @@ class TransactionService {
   static async modifyTransaction(id, userId, data) {
     const tx = await this.#getOwnedTransaction(id, userId);
 
+    let accountId = tx.accountId || null;
+    if (data.accountId !== undefined) {
+      if (data.accountId === null || data.accountId === '') {
+        accountId = null; // explicit unassign
+      } else {
+        await AccountService.getOwnedAccount(data.accountId, userId);
+        accountId = data.accountId;
+      }
+    }
+
     // Prepare update payload (prevent overwriting userId or id)
     const updatePayload = {
       type: data.type || tx.type,
       category: data.category ? await CategoryService.resolve(userId, data.category) : tx.category,
       amount: data.amount !== undefined ? data.amount : tx.amount,
       description: data.description !== undefined ? data.description : tx.description,
-      date: data.date ? normalizeDate(data.date) : tx.date
+      date: data.date ? normalizeDate(data.date) : tx.date,
+      accountId
     };
 
     const updatedTx = await TransactionModel.update(id, updatePayload);

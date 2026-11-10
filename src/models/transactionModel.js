@@ -17,12 +17,13 @@ const SORT_COLUMNS = {
 
 function mapRow(row) {
   if (!row) return null;
-  const { amountCents, updatedAt, recurringRuleId, ...rest } = row;
+  const { amountCents, updatedAt, recurringRuleId, accountId, ...rest } = row;
   return {
     ...rest,
     amount: toAmount(amountCents),
     ...(updatedAt ? { updatedAt } : {}),
-    ...(recurringRuleId ? { recurringRuleId } : {})
+    ...(recurringRuleId ? { recurringRuleId } : {}),
+    ...(accountId ? { accountId } : {})
   };
 }
 
@@ -30,7 +31,7 @@ function mapRow(row) {
  * Builds the shared WHERE clause + params for user-scoped queries with
  * optional type / category / description-search filters.
  */
-function buildFilters(userId, { type, category, q, from, toExclusive } = {}) {
+function buildFilters(userId, { type, category, q, from, toExclusive, accountId } = {}) {
   const clauses = ['userId = ?'];
   const params = [userId];
 
@@ -41,6 +42,10 @@ function buildFilters(userId, { type, category, q, from, toExclusive } = {}) {
   if (category) {
     clauses.push('LOWER(TRIM(category)) = LOWER(TRIM(?))');
     params.push(category);
+  }
+  if (accountId) {
+    clauses.push('accountId = ?');
+    params.push(accountId);
   }
   if (q) {
     // Escape LIKE wildcards so a literal % or _ in the search term matches itself.
@@ -271,11 +276,12 @@ class TransactionModel {
       description: txData.description || '',
       date: txData.date || new Date().toISOString(),
       createdAt: new Date().toISOString(),
-      recurringRuleId: txData.recurringRuleId || null
+      recurringRuleId: txData.recurringRuleId || null,
+      accountId: txData.accountId || null
     };
     db.prepare(
-      `INSERT INTO transactions (id, userId, type, category, amountCents, description, date, createdAt, recurringRuleId)
-       VALUES (@id, @userId, @type, @category, @amountCents, @description, @date, @createdAt, @recurringRuleId)`
+      `INSERT INTO transactions (id, userId, type, category, amountCents, description, date, createdAt, recurringRuleId, accountId)
+       VALUES (@id, @userId, @type, @category, @amountCents, @description, @date, @createdAt, @recurringRuleId, @accountId)`
     ).run(row);
 
     return mapRow({ ...row, updatedAt: null });
@@ -292,7 +298,8 @@ class TransactionModel {
       .prepare(
         `UPDATE transactions
          SET type = @type, category = @category, amountCents = @amountCents,
-             description = @description, date = @date, updatedAt = @updatedAt
+             description = @description, date = @date, accountId = @accountId,
+             updatedAt = @updatedAt
          WHERE id = @id`
       )
       .run({
@@ -302,6 +309,7 @@ class TransactionModel {
         amountCents: toCents(updateData.amount),
         description: updateData.description,
         date: updateData.date,
+        accountId: updateData.accountId || null,
         updatedAt: new Date().toISOString()
       });
 

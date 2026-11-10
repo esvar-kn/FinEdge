@@ -8,8 +8,8 @@ import { queryDateRange, isValidMonth } from '../utils/dates.js';
  * Throws AppError(400) on an invalid from/to value.
  */
 function parseListOptions(query) {
-  const { type, category, q, sort, order, from, to } = query;
-  const options = { type, category, q, sort, order };
+  const { type, category, q, sort, order, from, to, accountId } = query;
+  const options = { type, category, q, sort, order, accountId };
 
   if (from !== undefined || to !== undefined) {
     const range = queryDateRange(from, to);
