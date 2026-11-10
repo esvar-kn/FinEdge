@@ -118,11 +118,12 @@ class AccountModel {
       name: data.name,
       type: data.type,
       openingBalanceCents: data.openingBalance !== undefined ? toCents(data.openingBalance) : 0,
+      currency: (data.currency || 'USD').toUpperCase(),
       createdAt: new Date().toISOString()
     };
     db.prepare(
-      `INSERT INTO accounts (id, userId, name, type, openingBalanceCents, createdAt)
-       VALUES (@id, @userId, @name, @type, @openingBalanceCents, @createdAt)`
+      `INSERT INTO accounts (id, userId, name, type, openingBalanceCents, currency, createdAt)
+       VALUES (@id, @userId, @name, @type, @openingBalanceCents, @currency, @createdAt)`
     ).run(row);
     return this.findById(row.id);
   }
@@ -142,6 +143,7 @@ class AccountModel {
       type: fields.type !== undefined ? fields.type : current.type,
       openingBalanceCents:
         fields.openingBalance !== undefined ? toCents(fields.openingBalance) : current.openingBalanceCents,
+      currency: fields.currency !== undefined ? String(fields.currency).toUpperCase() : current.currency,
       archived: fields.archived !== undefined ? (fields.archived ? 1 : 0) : current.archived,
       updatedAt: new Date().toISOString(),
       id
@@ -149,7 +151,7 @@ class AccountModel {
     db.prepare(
       `UPDATE accounts
        SET name = @name, type = @type, openingBalanceCents = @openingBalanceCents,
-           archived = @archived, updatedAt = @updatedAt
+           currency = @currency, archived = @archived, updatedAt = @updatedAt
        WHERE id = @id`
     ).run(merged);
     return this.findById(id);

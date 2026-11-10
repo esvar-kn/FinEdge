@@ -19,6 +19,24 @@ export const SUPPORTED_CURRENCIES = [
 const CODES = new Set(SUPPORTED_CURRENCIES.map(c => c.code));
 
 /**
+ * Static fallback exchange rates expressed as units of the currency per 1 USD.
+ * Used to seed the `exchange_rates` table on first run and whenever a live
+ * refresh is unavailable, so conversion always works offline. Approximate.
+ */
+export const DEFAULT_RATES_PER_USD = {
+  USD: 1,
+  EUR: 0.92,
+  GBP: 0.79,
+  INR: 83,
+  JPY: 150,
+  CAD: 1.36,
+  AUD: 1.52,
+  SGD: 1.34,
+  AED: 3.67,
+  CHF: 0.88
+};
+
+/**
  * @param {string} code
  * @returns {boolean}
  */

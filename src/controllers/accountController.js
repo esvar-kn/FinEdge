@@ -25,11 +25,12 @@ class AccountController {
    */
   static async getAccounts(req, res, next) {
     try {
-      const { accounts, netWorth } = await AccountService.getAccounts(req.userId);
+      const { accounts, netWorth, displayCurrency } = await AccountService.getAccounts(req.userId);
       res.status(200).json({
         status: 'success',
         results: accounts.length,
         netWorth,
+        displayCurrency,
         data: { accounts }
       });
     } catch (error) {

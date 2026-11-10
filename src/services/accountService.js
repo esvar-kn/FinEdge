@@ -1,5 +1,8 @@
 import AccountModel from '../models/accountModel.js';
+import UserModel from '../models/userModel.js';
+import RateService from './rateService.js';
 import { AppError } from '../middleware/errorHandler.js';
+import { isSupportedCurrency } from '../utils/currency.js';
 
 const VALID_TYPES = ['checking', 'savings', 'credit', 'cash', 'other'];
 
@@ -12,10 +15,28 @@ class AccountService {
    */
   static async getAccounts(userId) {
     const accounts = await AccountModel.withBalances(userId);
-    const netWorth = accounts
+
+    // Convert each account's balance into the user's display currency so net
+    // worth sums correctly across mixed-currency accounts.
+    const user = await UserModel.findById(userId);
+    const displayCurrency = (user && user.currency) || 'USD';
+    const { rates } = await RateService.getRates();
+
+    const enriched = accounts.map((a) => {
+      const balanceCents = Math.round(a.balance * 100);
+      const convertedCents = RateService.convertCents(balanceCents, a.currency || 'USD', displayCurrency, rates);
+      return { ...a, balanceInDisplayCurrency: convertedCents / 100 };
+    });
+
+    const netWorth = enriched
       .filter((a) => !a.archived)
-      .reduce((sum, a) => sum + a.balance, 0);
-    return { accounts, netWorth: Math.round(netWorth * 100) / 100 };
+      .reduce((sum, a) => sum + a.balanceInDisplayCurrency, 0);
+
+    return {
+      accounts: enriched,
+      displayCurrency,
+      netWorth: Math.round(netWorth * 100) / 100
+    };
   }
 
   /**
@@ -25,12 +46,23 @@ class AccountService {
    * @returns {Promise<Object>}
    */
   static async addAccount(userId, data) {
+    let currency = data.currency;
+    if (currency !== undefined) {
+      if (!isSupportedCurrency(currency)) {
+        throw new AppError(`Unsupported currency '${currency}'.`, 400);
+      }
+      currency = currency.toUpperCase();
+    } else {
+      const user = await UserModel.findById(userId);
+      currency = (user && user.currency) || 'USD';
+    }
     try {
       return await AccountModel.create({
         userId,
         name: data.name.trim(),
         type: data.type,
-        openingBalance: data.openingBalance
+        openingBalance: data.openingBalance,
+        currency
       });
     } catch (error) {
       if (String(error.message).includes('UNIQUE')) {
@@ -68,6 +100,12 @@ class AccountService {
     await this.getOwnedAccount(id, userId);
     const fields = { ...data };
     if (fields.name !== undefined) fields.name = fields.name.trim();
+    if (fields.currency !== undefined) {
+      if (!isSupportedCurrency(fields.currency)) {
+        throw new AppError(`Unsupported currency '${fields.currency}'.`, 400);
+      }
+      fields.currency = fields.currency.toUpperCase();
+    }
     try {
       return await AccountModel.update(id, fields);
     } catch (error) {
