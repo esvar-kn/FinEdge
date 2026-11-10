@@ -223,4 +223,52 @@ describe('Accounts, Transfers & Net Worth', () => {
       assert.strictEqual(cash.balance, 200);
     });
   });
+
+  describe('Net worth over time', () => {
+    let nwAuth;
+    const today = new Date().toISOString().slice(0, 10);
+
+    before(async () => {
+      const reg = await request(app)
+        .post('/api/users/register')
+        .send({ username: 'nw_user', email: 'nw@finedge.com', password: 'password123' });
+      nwAuth = { Authorization: `Bearer ${reg.body.data.token}` };
+      await request(app)
+        .post('/api/accounts')
+        .set(nwAuth)
+        .send({ name: 'Main', type: 'checking', openingBalance: 1000 });
+    });
+
+    test('records a snapshot of current net worth for today', async () => {
+      const res = await request(app).get('/api/accounts/history').set(nwAuth);
+      assert.strictEqual(res.status, 200);
+      assert.strictEqual(res.body.results, 1);
+      const point = res.body.data.history[0];
+      assert.strictEqual(point.date, today);
+      assert.strictEqual(point.netWorth, 1000);
+    });
+
+    test("today's point updates as balances change (no duplicate day)", async () => {
+      await request(app)
+        .post('/api/accounts')
+        .set(nwAuth)
+        .send({ name: 'Savings', type: 'savings', openingBalance: 500 });
+
+      const res = await request(app).get('/api/accounts/history?days=7').set(nwAuth);
+      assert.strictEqual(res.body.results, 1); // still one calendar day
+      assert.strictEqual(res.body.data.history[0].netWorth, 1500);
+    });
+
+    test('history is user-scoped', async () => {
+      const other = await request(app)
+        .post('/api/users/register')
+        .send({ username: 'nw_other', email: 'nw_other@finedge.com', password: 'password123' });
+      const res = await request(app)
+        .get('/api/accounts/history')
+        .set({ Authorization: `Bearer ${other.body.data.token}` });
+      // The other user sees only their own snapshot (net worth 0), never 1500.
+      assert.strictEqual(res.body.results, 1);
+      assert.strictEqual(res.body.data.history[0].netWorth, 0);
+    });
+  });
 });
