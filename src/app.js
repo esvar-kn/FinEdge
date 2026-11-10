@@ -15,6 +15,7 @@ import accountRoutes from './routes/accountRoutes.js';
 import transferRoutes from './routes/transferRoutes.js';
 import { scheduleBackups } from './utils/backup.js';
 import RecurringService from './services/recurringService.js';
+import NetWorthService from './services/netWorthService.js';
 
 import { fileURLToPath } from 'url';
 import path from 'path';
@@ -89,7 +90,9 @@ if (isMain) {
     .then(created => {
       if (created > 0) console.log(`Recurring rules materialized ${created} transaction(s).`);
     })
-    .catch(err => console.error('Recurring rule sweep failed:', err));
+    .catch(err => console.error('Recurring rule sweep failed:', err))
+    // Snapshot today's net worth after recurring entries have been applied, then daily.
+    .finally(() => NetWorthService.scheduleSnapshots());
   app.listen(PORT, () => {
     console.log(`FinEdge API Server is running on port ${PORT}`);
   });

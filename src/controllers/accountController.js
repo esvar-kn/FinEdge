@@ -1,6 +1,25 @@
 import AccountService from '../services/accountService.js';
+import NetWorthService from '../services/netWorthService.js';
 
 class AccountController {
+  /**
+   * Net-worth history for charting: ?days=N (default 30, max 365). Today's
+   * point is refreshed to the current net worth before the series is returned.
+   */
+  static async getNetWorthHistory(req, res, next) {
+    try {
+      const days = Math.min(Math.max(parseInt(req.query.days, 10) || 30, 1), 365);
+      const history = await NetWorthService.getHistory(req.userId, days);
+      res.status(200).json({
+        status: 'success',
+        results: history.length,
+        data: { history }
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
   /**
    * Lists the user's accounts with balances and total net worth.
    */

@@ -103,6 +103,17 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_transfers_userId ON transfers(userId);
   CREATE INDEX IF NOT EXISTS idx_transfers_from ON transfers(fromAccountId);
   CREATE INDEX IF NOT EXISTS idx_transfers_to ON transfers(toAccountId);
+
+  CREATE TABLE IF NOT EXISTS net_worth_snapshots (
+    id            TEXT PRIMARY KEY,
+    userId        TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    date          TEXT NOT NULL,
+    netWorthCents INTEGER NOT NULL,
+    createdAt     TEXT NOT NULL,
+    UNIQUE (userId, date)
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_networth_userId_date ON net_worth_snapshots(userId, date);
 `);
 
 // Lightweight migrations for databases created before a column existed.

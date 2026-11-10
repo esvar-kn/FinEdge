@@ -6,6 +6,8 @@ const router = Router();
 
 router.use(requireAuth);
 
+// Fixed paths before the /:id parameter route.
+router.get('/history', AccountController.getNetWorthHistory);
 router.get('/', AccountController.getAccounts);
 router.post('/', validateAccount, AccountController.createAccount);
 router.put('/:id', validateAccountUpdate, AccountController.updateAccount);
