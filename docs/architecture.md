@@ -149,6 +149,16 @@ Represents money moved between two of a user's own accounts. Transfers are **del
 
 **Derived balance:** `openingBalanceCents + Σ(income) − Σ(expense) + Σ(transfers in) − Σ(transfers out)`, computed in SQL over integer cents. **Net worth** is the sum of all non-archived account balances; credit accounts carry negative balances, so liabilities net out correctly.
 
+### 3.5. Net Worth Snapshot Schema (`net_worth_snapshots` table)
+Captures a user's net worth once per calendar day so it can be charted over time. Net worth is a running balance (a stock, not a flow), so it is **snapshotted**, not recomputed from historical transactions. Written on server start and every 24 hours for all users; today's row is also refreshed (upserted) whenever `GET /api/accounts/history` is read.
+
+| Property Name | Data Type | Database Constraint / Rules | Description |
+| :--- | :--- | :--- | :--- |
+| `id` | `UUID (string)` | Primary Key, Auto-generated | Unique identifier for the snapshot. |
+| `userId` | `UUID (string)` | Foreign Key -> `users.id`, `ON DELETE CASCADE` | The owner. |
+| `date` | `string` | `YYYY-MM-DD`, unique per user (one row per day) | Calendar day of the snapshot. |
+| `netWorthCents` | `integer` | May be negative | Net worth in minor units on that day. |
+
 ---
 
 ## 4. Component Interface Design

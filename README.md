@@ -7,7 +7,7 @@ FinEdge is a clean, modular RESTful API backend for tracking personal finances �
 | Area | What you get |
 | :--- | :--- |
 | Transactions | Full CRUD with ownership checks, filters, description search, date ranges, sorting, and pagination |
-| Accounts | Multiple wallets (checking, savings, credit, cash, other) with opening balances, derived per-account balance, and total net worth |
+| Accounts | Multiple wallets (checking, savings, credit, cash, other) with opening balances, derived per-account balance, total net worth, and a daily net-worth history series for charting |
 | Transfers | Move money between accounts without polluting income/expense analytics |
 | Analytics | Exact SQL-computed summaries, all-time or per-month, plus a per-month trend series for charting |
 | Budgets | Monthly per-category limits with `ok` / `warning` / `over` status folded into insights |
@@ -19,7 +19,7 @@ FinEdge is a clean, modular RESTful API backend for tracking personal finances �
 | Insights | Rule-based advice out of the box; optional AI-generated advice via the Groq API (free tier); month-end forecast, bill reminders, and year reports |
 | Accounts | Register, login with optional "remember me" (30-day token), password reset, profile, account deletion |
 | Security | JWT auth, bcrypt hashing, helmet headers, opt-in CORS, rate-limited auth endpoints |
-| Reliability | WAL-mode SQLite, foreign keys with cascade, daily backups with retention, 88 automated tests |
+| Reliability | WAL-mode SQLite, foreign keys with cascade, daily backups with retention, 91 automated tests |
 | Frontend | Connected single-page web UI (served by the backend) with an installable PWA manifest |
 
 ---
@@ -66,6 +66,7 @@ FinEdge/
 │   │   ├── goalService.js         # Savings goal logic and progress
 │   │   ├── accountService.js      # Account logic, balances, net worth, delete guards
 │   │   ├── transferService.js     # Transfer logic with account ownership checks
+│   │   ├── netWorthService.js     # Daily net-worth snapshots + history
 │   │   └── aiInsightsService.js   # Groq-powered advice with rule-based fallback
 │   ├── models/
 │   │   ├── userModel.js           # Users table access
@@ -75,7 +76,8 @@ FinEdge/
 │   │   ├── categoryModel.js       # Distinct categories across all tables
 │   │   ├── goalModel.js           # Savings goals table access
 │   │   ├── accountModel.js        # Accounts table access + derived balances
-│   │   └── transferModel.js       # Transfers table access
+│   │   ├── transferModel.js       # Transfers table access
+│   │   └── netWorthModel.js       # Net-worth snapshot upsert + history
 │   ├── middleware/
 │   │   ├── logger.js              # Request logger with timing metrics
 │   │   ├── errorHandler.js        # Centralized operational AppError handling
@@ -173,7 +175,7 @@ FinEdge/
 ## Testing
 
 ```bash
-npm test              # run all 88 tests
+npm test              # run all 91 tests
 npm run test:coverage # run with c8 coverage reporting
 ```
 
@@ -270,11 +272,14 @@ Categories are normalized on every write (transactions, budgets, recurring rules
 | Method | Endpoint | Auth | Description |
 | :--- | :--- | :--- | :--- |
 | **GET** | `/api/accounts` | Bearer | Lists accounts with a derived `balance`, plus top-level `netWorth` (sum of non-archived account balances) |
+| **GET** | `/api/accounts/history` | Bearer | Net-worth history for charting: `[{ date, netWorth }]` over the last `?days=N` days (default 30, max 365). Today's point is refreshed to the current net worth on each call |
 | **POST** | `/api/accounts` | Bearer | Creates an account: `{ "name", "type": "checking"\|"savings"\|"credit"\|"cash"\|"other", "openingBalance"? }` |
 | **PUT** | `/api/accounts/:id` | Bearer | Updates name/type/openingBalance, or sets `{ "archived": true }` to exclude it from net worth |
 | **DELETE** | `/api/accounts/:id` | Bearer | Deletes an account. Returns 409 if transactions still reference it, unless `?reassignTo=<accountId>` moves them to another owned account; 409 if transfers reference it (delete those first) |
 
 An account's **balance is derived, never stored**: `openingBalance + income − expenses + transfers in − transfers out`, computed in SQL over integer cents. Credit accounts simply carry a negative balance, so liabilities net out of net worth correctly. Account names are unique per user (case-insensitive).
+
+**Net worth over time** is recorded as a once-per-day snapshot per user (`net_worth_snapshots` table). Snapshots are written on server start and every 24 hours for all users, and today's value is refreshed whenever `GET /api/accounts/history` is called — so the series stays current even between daily runs without ever duplicating a calendar day.
 
 Transactions accept an optional **`accountId`** on create and update (ownership-checked), and the list endpoint supports `?accountId=` as a filter. Existing transactions without an account stay valid as "unassigned," and if an account is deleted its transactions are kept (reassigned or set unassigned) — analytics never break.
 
